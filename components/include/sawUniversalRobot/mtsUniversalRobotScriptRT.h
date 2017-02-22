@@ -150,7 +150,6 @@ protected:
     // Internal use
     char VelCmdString[100];
     char VelCmdStop[100];
-    char CartPosCmdString[100];
     int  VelCmdTimeout;
 
     // For real-time debugging
@@ -225,7 +224,7 @@ public:
 
     virtual ~mtsUniversalRobotScriptRT();
 
-    void Configure(const std::string &filename = "");
+    void Configure(const std::string &ipAddr = "");
 
     void Startup(void);
 

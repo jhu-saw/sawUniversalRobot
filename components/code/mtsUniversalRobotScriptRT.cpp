@@ -122,12 +122,12 @@ void mtsUniversalRobotScriptRT::Init(void)
     }
 }
 
-void mtsUniversalRobotScriptRT::Configure(const std::string &filename)
+void mtsUniversalRobotScriptRT::Configure(const std::string &ipAddr)
 {
-    if (filename.empty())
+    if (ipAddr.empty())
         CMN_LOG_CLASS_INIT_ERROR << "Configure method requires IP address" << std::endl;
     else {
-        ipAddress = filename;
+        ipAddress = ipAddr;
         currentPort = 30003;
         CMN_LOG_CLASS_INIT_VERBOSE << "Connecting to ip " << ipAddress
                                    << ", port " << currentPort << std::endl;
@@ -179,10 +179,14 @@ void mtsUniversalRobotScriptRT::Run(void)
         SocketError();
         socket.Close();
         UR_State = UR_NOT_CONNECTED;
+        RunEvent();
+        ProcessQueuedCommands();
         return;
     }
     if (numBytes == 0) {
         ReceiveTimeout();
+        RunEvent();
+        ProcessQueuedCommands();
         return;
     }
 
@@ -322,7 +326,6 @@ void mtsUniversalRobotScriptRT::Cleanup(void)
 
 void mtsUniversalRobotScriptRT::SetRobotFreeDriveMode(void)
 {
-    std::cout << "Free Drive Mode" << std::endl;
     if (UR_State == UR_IDLE) {
         UR_State = UR_FREE_DRIVE;
     }
@@ -332,7 +335,6 @@ void mtsUniversalRobotScriptRT::SetRobotFreeDriveMode(void)
 
 void mtsUniversalRobotScriptRT::SetRobotRunningMode(void)
 {
-    std::cout << "Running Mode" << std::endl;
     if (UR_State == UR_FREE_DRIVE) {
         UR_State = UR_IDLE;
     }
@@ -342,7 +344,6 @@ void mtsUniversalRobotScriptRT::SetRobotRunningMode(void)
 
 void mtsUniversalRobotScriptRT::DisableMotorPower(void)
 {
-    std::cout << "Shut down robot" << std::endl;
     if (socket.Send("powerdown()\n") == -1)
         SocketError();
 }
@@ -375,8 +376,6 @@ void mtsUniversalRobotScriptRT::JointVelocityMove(const prmVelocityJointSet &jtv
         strcpy(VelCmdStop, "speedj([0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 1.4, 0.0)\n");
         VelCmdTimeout = 100;   // Number of cycles for command to remain valid
         UR_State = UR_VEL_MOVING;
-        CMN_LOG_CLASS_RUN_DEBUG << "JointVelocityMove(" << jtvel << "): started at tick = "
-                                << GetTick() << std::endl;
     }
     else
         RobotNotReady();
@@ -395,12 +394,9 @@ void mtsUniversalRobotScriptRT::JointPositionMove(const prmPositionJointSet &jtp
                 jtpos[0], jtpos[1], jtpos[2], jtpos[3], jtpos[4], jtpos[5], 1.4, 0.2);
         if (socket.Send(JointPosCmdString) == -1)
             SocketError();
-        else {
+        else
             UR_State = UR_POS_MOVING;
-            CMN_LOG_CLASS_RUN_DEBUG << "JointPositionMove(" << jtpos << "): started at tick = "
-                << GetTick() << std::endl;
-        }
-      }
+    }
     else
         RobotNotReady();
 }
@@ -417,8 +413,6 @@ void mtsUniversalRobotScriptRT::CartesianVelocityMove(const prmVelocityCartesian
         strcpy(VelCmdStop, "speedl([0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 1.4, 0.0)\n");
         VelCmdTimeout = 100;   // Number of cycles for command to remain valid
         UR_State = UR_VEL_MOVING;
-        CMN_LOG_CLASS_RUN_DEBUG << "CartesianVelocityMove(" << velxyz << "): started at tick = "
-                                << GetTick() << std::endl;
     }
     else
         RobotNotReady();
@@ -426,20 +420,19 @@ void mtsUniversalRobotScriptRT::CartesianVelocityMove(const prmVelocityCartesian
 
 void mtsUniversalRobotScriptRT::CartesianPositionMove(const prmPositionCartesianSet &CartPos)
 {
+    char CartPosCmdString[100];
     if (UR_State == UR_IDLE) {
         vctDoubleFrm3 cartFrm = CartPos.GetGoal();
         vctRodriguezRotation3<double> rot;
         rot.From(cartFrm.Rotation());  // The rotation vector
         sprintf(CartPosCmdString,
             "movel(p[%6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf], a=%6.4lf, v=%6.4lf)\n",
-            cartFrm.Translation().X(), cartFrm.Translation().Y(), cartFrm.Translation().Z(), rot.X(), rot.Y(), rot.Z(), 1.2, 0.08);
+            cartFrm.Translation().X(), cartFrm.Translation().Y(), cartFrm.Translation().Z(),
+            rot.X(), rot.Y(), rot.Z(), 1.2, 0.08);
         if (socket.Send(CartPosCmdString) == -1)
             SocketError();
-        else {
+        else
             UR_State = UR_POS_MOVING;
-            CMN_LOG_CLASS_RUN_DEBUG << "CartesianPositionMove(" << cartFrm.Translation() << rot << "): started at tick = "
-                << GetTick() << std::endl;
-        }
     }
     else
         RobotNotReady();

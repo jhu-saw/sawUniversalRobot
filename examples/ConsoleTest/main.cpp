@@ -2,7 +2,7 @@
 /*ex: set filetype=cpp softtabstop=4 shiftwidth=4 tabstop=4 cindent expandtab:*/
 
 /*
-(C) Copyright 2016 Johns Hopkins University (JHU), All Rights Reserved.
+(C) Copyright 2016-2017 Johns Hopkins University (JHU), All Rights Reserved.
 
 --- begin cisst license - do not edit ---
 
@@ -29,6 +29,7 @@ class UniversalRobotClient : public mtsTaskMain {
 
 private:
     prmPositionJointGet jtpos;
+    prmPositionCartesianGet cartpos;
     vctDoubleVec jtgoal, jtvel;
     prmPositionJointSet jtposSet;
     prmPositionCartesianSet cartposSet;
@@ -38,6 +39,7 @@ private:
     mtsFunctionRead GetControllerTime;
     mtsFunctionRead GetControllerExecTime;
     mtsFunctionRead GetPositionJoint;
+    mtsFunctionRead GetPositionCartesian;
     mtsFunctionRead GetConnected;
     mtsFunctionRead GetVersion;
     mtsFunctionRead GetAveragePeriod;
@@ -78,6 +80,7 @@ public:
             req->AddFunction("GetControllerTime", GetControllerTime);
             req->AddFunction("GetControllerExecTime", GetControllerExecTime);
             req->AddFunction("GetPositionJoint", GetPositionJoint);
+            req->AddFunction("GetPositionCartesian", GetPositionCartesian);
             req->AddFunction("GetConnected", GetConnected);
             req->AddFunction("GetAveragePeriod", GetAveragePeriod);
             req->AddFunction("JointPositionMove", PositionMoveJoint);
@@ -109,7 +112,7 @@ public:
             << "M: position move cartesian" << std::endl
             << "v: velocity move joints" << std::endl
             << "V: velocity move cartesian" << std::endl
-            << "d: display debug data" << std::endl
+            << "d: toggle debug data display" << std::endl
             << "s: stop motion" << std::endl
             << "x: get version" << std::endl
             << "f: free drive mode" << std::endl
@@ -125,6 +128,7 @@ public:
         double period, cTime, cExecTime;
         vct3 velxyz, velrot;
         vct3 cartPos, cartVec;
+        vctDoubleRot3 cartRot;
         vct6 debug;
         int version;
         char *versionString[] = { "Unknown", "Pre-1.8", "1.8", "3.0/3.1", "3.2" };
@@ -135,6 +139,7 @@ public:
         GetControllerTime(cTime);
         GetControllerExecTime(cExecTime);
         GetPositionJoint(jtpos);
+        GetPositionCartesian(cartpos);
         GetConnected(connected);
         GetAveragePeriod(period);
 
@@ -152,18 +157,20 @@ public:
                     break;
 
                 case 'M':   // position move Cartesian
-                {
                     std::cout << std::endl << "Enter Cartesian positions (mm): ";
                     std::cin >> cartPos[0] >> cartPos[1] >> cartPos[2];
                     cartPos.Divide(1000.0);  // convert from mm to m
-                    std::cout << std::endl << "Enter Cartesian orientation: ";
-                    std::cin >> cartVec[0] >> cartVec[1] >> cartVec[2];
-                    vctRodriguezRotation3<double> rot(cartVec);
-                    vctDoubleRot3 cartRot(rot);
                     cartposSet.SetGoal(cartPos);
+                    std::cout << std::endl << "Enter Cartesian orientation (Rodriguez; 0,0,0 to skip): ";
+                    std::cin >> cartVec[0] >> cartVec[1] >> cartVec[2];
+                    if (cartVec.Any()) {
+                        vctRodriguezRotation3<double> rot(cartVec);
+                        cartRot.From(rot);
+                    }
+                    else
+                        cartRot.Assign(cartpos.Position().Rotation());
                     cartposSet.SetGoal(cartRot);
                     PositionMoveCartesian(cartposSet);
-                }
                     break;
 
                 case 'v':   // velocity move joint
