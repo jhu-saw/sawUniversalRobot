@@ -14,7 +14,7 @@ http://www.cisst.org/cisst/license.txt.
 */
 
 // check if this module is build as a DLL
-#ifdef sawUniversalRobotController_EXPORTS
+#ifdef sawUniversalRobot_EXPORTS
 #define CISST_THIS_LIBRARY_AS_DLL
 #endif
 

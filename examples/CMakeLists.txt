@@ -30,7 +30,7 @@ if (cisst_FOUND)
   endif ()
 
   # Copy python file to the bin directory
-  add_custom_target (sawUniversalRobot ALL
+  add_custom_target (sawUniversalRobotExamples ALL
                      ${CMAKE_COMMAND} -E copy
                      ${CMAKE_CURRENT_SOURCE_DIR}/python/ur_robot.py
                      ${EXECUTABLE_OUTPUT_PATH}/${CMAKE_CFG_INTDIR}/ur_robot.py
