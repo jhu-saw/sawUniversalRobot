@@ -1,0 +1,21 @@
+<package>
+  <name>saw_universal_robot_examples</name>
+  <version>1.0.0</version>
+  <description>
+  sawUniversalRobot Examples
+  </description>
+  <maintainer email="anton.deguet@jhu.edu">Anton Deguet</maintainer>
+  <license>cisst</license>
+  <url>https://github.com/jhu-saw/sawUniversalRobot</url>
+
+  <build_depend>cisst</build_depend>
+  <build_depend>saw_universal_robot</build_depend>
+
+  <run_depend>cisst</run_depend>
+  <run_depend>saw_universal_robot</run_depend>
+
+  <export>
+    <build_type>catkin</build_type>
+  </export>
+
+</package>
