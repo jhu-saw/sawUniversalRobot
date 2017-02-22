@@ -88,37 +88,40 @@ void mtsUniversalRobotScriptRT::Init(void)
     StateTable.AddData(WrenchGet, "ForceCartesianParam");
     StateTable.AddData(debug, "Debug");
   
-    mtsInterfaceProvided *provided = AddInterfaceProvided("control");
-    if (provided) {
+    mInterface = AddInterfaceProvided("control");
+    if (mInterface) {
+        // for Status, Warning and Error with mtsMessage
+        mInterface->AddMessageEvents();
+        
         // Standard interfaces (same as dVRK)
-        provided->AddCommandReadState(this->StateTable, JointPosParam, "GetPositionJoint");
-        provided->AddCommandReadState(this->StateTable, JointTargetPos, "GetPositionJointDesired");
-        provided->AddCommandReadState(this->StateTable, JointVelParam, "GetVelocityJoint");
-        provided->AddCommandReadState(this->StateTable, CartPos, "GetPositionCartesian");
-        provided->AddCommandReadState(this->StateTable, CartVelParam, "GetVelocityCartesian");
-        provided->AddCommandReadState(this->StateTable, WrenchGet, "GetWrenchBody");
-        provided->AddCommandWrite(&mtsUniversalRobotScriptRT::JointVelocityMove, this, "JointVelocityMove");
-        provided->AddCommandWrite(&mtsUniversalRobotScriptRT::JointPositionMove, this, "JointPositionMove");
-        provided->AddCommandWrite(&mtsUniversalRobotScriptRT::CartesianPositionMove,this, "CartesianPositionMove");
-        provided->AddCommandWrite(&mtsUniversalRobotScriptRT::CartesianVelocityMove,this, "CartesianVelocityMove");
+        mInterface->AddCommandReadState(this->StateTable, JointPosParam, "GetPositionJoint");
+        mInterface->AddCommandReadState(this->StateTable, JointTargetPos, "GetPositionJointDesired");
+        mInterface->AddCommandReadState(this->StateTable, JointVelParam, "GetVelocityJoint");
+        mInterface->AddCommandReadState(this->StateTable, CartPos, "GetPositionCartesian");
+        mInterface->AddCommandReadState(this->StateTable, CartVelParam, "GetVelocityCartesian");
+        mInterface->AddCommandReadState(this->StateTable, WrenchGet, "GetWrenchBody");
+        mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::JointVelocityMove, this, "JointVelocityMove");
+        mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::JointPositionMove, this, "JointPositionMove");
+        mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::CartesianPositionMove,this, "CartesianPositionMove");
+        mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::CartesianVelocityMove,this, "CartesianVelocityMove");
 
         // Following are not yet standardized
-        provided->AddCommandReadState(StateTable, ControllerTime, "GetControllerTime");
-        provided->AddCommandReadState(StateTable, ControllerExecTime, "GetControllerExecTime");
-        provided->AddCommandVoid(&mtsUniversalRobotScriptRT::DisableMotorPower, this, "DisableMotorPower");
-        provided->AddCommandRead(&mtsUniversalRobotScriptRT::GetConnected, this, "GetConnected");
-        provided->AddCommandRead(&mtsUniversalRobotScriptRT::GetAveragePeriod, this, "GetAveragePeriod");
-        provided->AddCommandVoid(&mtsUniversalRobotScriptRT::StopMotion, this, "StopMotion");  
-        provided->AddCommandVoid(&mtsUniversalRobotScriptRT::SetRobotRunningMode, this, "SetRobotRunningMode");
-        provided->AddCommandVoid(&mtsUniversalRobotScriptRT::SetRobotFreeDriveMode, this, "SetRobotFreeDriveMode");
-        provided->AddCommandReadState(StateTable, debug, "GetDebug");
-        provided->AddCommandRead(&mtsUniversalRobotScriptRT::GetVersion, this, "GetVersion");
+        mInterface->AddCommandReadState(StateTable, ControllerTime, "GetControllerTime");
+        mInterface->AddCommandReadState(StateTable, ControllerExecTime, "GetControllerExecTime");
+        mInterface->AddCommandVoid(&mtsUniversalRobotScriptRT::DisableMotorPower, this, "DisableMotorPower");
+        mInterface->AddCommandRead(&mtsUniversalRobotScriptRT::GetConnected, this, "GetConnected");
+        mInterface->AddCommandRead(&mtsUniversalRobotScriptRT::GetAveragePeriod, this, "GetAveragePeriod");
+        mInterface->AddCommandVoid(&mtsUniversalRobotScriptRT::StopMotion, this, "StopMotion");  
+        mInterface->AddCommandVoid(&mtsUniversalRobotScriptRT::SetRobotRunningMode, this, "SetRobotRunningMode");
+        mInterface->AddCommandVoid(&mtsUniversalRobotScriptRT::SetRobotFreeDriveMode, this, "SetRobotFreeDriveMode");
+        mInterface->AddCommandReadState(StateTable, debug, "GetDebug");
+        mInterface->AddCommandRead(&mtsUniversalRobotScriptRT::GetVersion, this, "GetVersion");
 
-        provided->AddEventVoid(SocketError, "SocketError");
-        provided->AddEventVoid(RobotNotReady, "RobotNotReady");
-        provided->AddEventVoid(ReceiveTimeout, "ReceiveTimeout");
+        mInterface->AddEventVoid(SocketErrorEvent, "SocketError");
+        mInterface->AddEventVoid(RobotNotReady, "RobotNotReady");
+        mInterface->AddEventVoid(ReceiveTimeout, "ReceiveTimeout");
         vctULong2 arg;
-        provided->AddEventWrite(PacketInvalid, "PacketInvalid", arg);
+        mInterface->AddEventWrite(PacketInvalid, "PacketInvalid", arg);
     }
 }
 
@@ -194,7 +197,8 @@ void mtsUniversalRobotScriptRT::Run(void)
     // Byteswap package length
     char *p = (char *)(&packageLength);
     p[0] = buffer[3]; p[1] = buffer[2]; p[2] = buffer[1]; p[3] = buffer[0];
-    if (packageLength == static_cast<unsigned long>(numBytes)) {
+    if ((packageLength > 0) && (packageLength <= static_cast<unsigned long>(numBytes))) {
+    // if (packageLength == static_cast<unsigned long>(numBytes)) {
         // Byteswap all the doubles in the package
         for (size_t i = 4; i < packageLength-4; i += 8) {
             for (size_t j = 0; j < 4; j++) {
@@ -268,6 +272,7 @@ void mtsUniversalRobotScriptRT::Run(void)
         }
     }
     else {
+        std::cerr << "packet invalid" << std::endl;
         PacketInvalid(vctULong2(numBytes, packageLength));
     }
 
@@ -322,6 +327,12 @@ void mtsUniversalRobotScriptRT::Run(void)
 
 void mtsUniversalRobotScriptRT::Cleanup(void)
 {
+}
+
+void mtsUniversalRobotScriptRT::SocketError(void)
+{
+    SocketErrorEvent();
+    mInterface->SendError(this->GetName() + "@" + ipAddress + ": socket error");
 }
 
 void mtsUniversalRobotScriptRT::SetRobotFreeDriveMode(void)

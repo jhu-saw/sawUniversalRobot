@@ -73,7 +73,7 @@ protected:
     };
 #pragma pack(pop)
 
-#pragma pack(push, 1) 
+#pragma pack(push, 1)
     struct module2 {
         unsigned long long digital_Input;  // Digital input bitmask
         double motor_Tem[6];      // Joint temperatures (degC)
@@ -84,7 +84,7 @@ protected:
     };
 #pragma pack(pop)
 
-#pragma pack(push, 1) 
+#pragma pack(push, 1)
     struct packet_pre_3 {
         module1 base1;
         double tool_Accele[3];    // Tool accelerometer values (Version 1.7+)
@@ -96,7 +96,7 @@ protected:
     };
 #pragma pack(pop)
 
-#pragma pack(push, 1) 
+#pragma pack(push, 1)
     struct packet_30_31 {
         module1 base1;
         double I_ctrl[6];         // Joint control currents
@@ -121,7 +121,7 @@ protected:
     };
 #pragma pack(pop)
 
-#pragma pack(push, 1) 
+#pragma pack(push, 1)
     struct packet_32 : packet_30_31 {
         unsigned long long digital_Output; // Digital outputs
         double program_State;     // Program state
@@ -154,7 +154,7 @@ protected:
 
     // For real-time debugging
     vct6 debug;
-    
+
     // For UR version determination
     enum FirmwareVersion {VER_UNKNOWN, VER_PRE_18, VER_18, VER_30_31, VER_32, VER_MAX};
     FirmwareVersion version;
@@ -211,12 +211,14 @@ protected:
     osaSocket socket;
 
     // Event generators
-    mtsFunctionVoid SocketError;
+    mtsFunctionVoid SocketErrorEvent;
+    void SocketError(void);
     mtsFunctionVoid RobotNotReady;
     mtsFunctionVoid ReceiveTimeout;
     mtsFunctionWrite PacketInvalid;
+    mtsInterfaceProvided * mInterface;
 
-public:  
+public:
 
     mtsUniversalRobotScriptRT(const std::string &name, unsigned int sizeStateTable = 256, bool newThread = true);
 
