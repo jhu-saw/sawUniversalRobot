@@ -131,7 +131,7 @@ public:
         vctDoubleRot3 cartRot;
         vct6 debug;
         int version;
-        char *versionString[] = { "Unknown", "Pre-1.8", "1.8", "3.0/3.1", "3.2" };
+        const char *versionString[] = { "Unknown", "Pre-1.8", "1.8", "3.0/3.1", "3.2" };
 
         ProcessQueuedEvents();
 

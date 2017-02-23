@@ -17,6 +17,7 @@ http://www.cisst.org/cisst/license.txt.
 
 #include <stdio.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 #include <cisstConfig.h>
 #include <cisstVector/vctRodriguezRotation3.h>
@@ -53,6 +54,7 @@ mtsUniversalRobotScriptRT::mtsUniversalRobotScriptRT(const mtsTaskContinuousCons
 mtsUniversalRobotScriptRT::~mtsUniversalRobotScriptRT()
 {
     socket.Close();
+    socketDB.Close();
 }
 
 void mtsUniversalRobotScriptRT::Init(void)
@@ -128,6 +130,7 @@ void mtsUniversalRobotScriptRT::Init(void)
         mInterface->AddCommandVoid(&mtsUniversalRobotScriptRT::SetRobotFreeDriveMode, this, "SetRobotFreeDriveMode");
         mInterface->AddCommandReadState(StateTable, debug, "GetDebug");
         mInterface->AddCommandRead(&mtsUniversalRobotScriptRT::GetVersion, this, "GetVersion");
+//        mInterface->AddCommandRead(&mtsUniversalRobotScriptRT::GetPolyscopeVersion, this, "GetPolyscopeVersion");
 
         mInterface->AddEventVoid(SocketErrorEvent, "SocketError");
         mInterface->AddEventVoid(RobotNotReadyEvent, "RobotNotReady");
@@ -161,6 +164,14 @@ void mtsUniversalRobotScriptRT::Configure(const std::string &ipAddr)
         else {
             CMN_LOG_CLASS_INIT_ERROR << "Socket not connected" << std::endl;
         }
+
+        if (socketDB.Connect(ipAddress.c_str(), 29999)) {
+            std::cout << "Connected to Dashboard Server" << std::endl;
+        }
+        else {
+            CMN_LOG_CLASS_INIT_ERROR << "Socket not connected to dashboard server" << std::endl;
+        }
+
     }
 }
 
@@ -173,6 +184,9 @@ void mtsUniversalRobotScriptRT::Startup(void)
     } else {
         mInterface->SendError(this->GetName() + ": socket not connected " + ipAddress);
     }
+
+    std::string pver;
+    GetPolyscopeVersion(pver);
 }
 
 void mtsUniversalRobotScriptRT::Run(void)
@@ -351,8 +365,6 @@ void mtsUniversalRobotScriptRT::Run(void)
         break;
 
     case UR_FREE_DRIVE:
-        if (socket.Send("freedrive_mode()\n") == -1)
-            SocketError();
         break;
 
     case UR_POS_MOVING:
@@ -394,10 +406,34 @@ void mtsUniversalRobotScriptRT::ReceiveTimeout(void)
     mInterface->SendError(this->GetName() + ": socket timeout");
 }
 
+
+bool mtsUniversalRobotScriptRT::SendAndReceive(std::string cmd, std::string &recv)
+{
+    char buf[100];
+    if (socketDB.Send(cmd) < 0) return false;
+    osaSleep(0.1);   // wait for reply
+    if (socketDB.Receive(buf, 100) < 0) return false;
+
+    recv = buf;
+    return true;
+}
+
 void mtsUniversalRobotScriptRT::SetRobotFreeDriveMode(void)
 {
     if (UR_State == UR_IDLE) {
-        UR_State = UR_FREE_DRIVE;
+        int ret;
+        if (version < VER_30_31) {
+            ret = socket.Send("set robotmode freedrive\n");
+        } else {
+            ret = socket.Send("def myProg():\n\tfreedrive_mode()\nsleep(200)\nend\n");
+        }
+
+        if (ret == -1) {
+            SocketError();
+        } else {
+            UR_State = UR_FREE_DRIVE;
+            std::cout << "====== set freedrive mode ====== \n";
+        }
     }
     else
         RobotNotReady();   // if not idle, ignore command and raise event
@@ -406,7 +442,18 @@ void mtsUniversalRobotScriptRT::SetRobotFreeDriveMode(void)
 void mtsUniversalRobotScriptRT::SetRobotRunningMode(void)
 {
     if (UR_State == UR_FREE_DRIVE) {
-        UR_State = UR_IDLE;
+        int ret;
+        if (version < VER_30_31) {
+            ret = socket.Send("set robotmode run\n");
+        } else {
+            ret = socket.Send("end_freedrive_mode()\n");
+        }
+
+        if (ret == -1) {
+            SocketError();
+        } else {
+            UR_State = UR_IDLE;
+        }
     }
     else
         RobotNotReady();   // if not idle, ignore command and raise event
@@ -512,4 +559,29 @@ void mtsUniversalRobotScriptRT::StopMotion(void)
 {
     if (socket.Send("stopj(1.4)\n") == -1)
         SocketError();
+}
+
+
+void mtsUniversalRobotScriptRT::GetPolyscopeVersion(std::string &pver)
+{
+    bool ret;
+    ret = SendAndReceive("PolyscopeVersion\n", pver);
+
+    std::vector<std::string> strings;
+    std::string s;
+    std::istringstream f(pver);
+    while (getline(f, s, '.')) {
+        strings.push_back(s);
+    }
+
+    if (strings.size() != 3) {
+        std::cerr << "invalid version\n";
+    }
+    else {
+        // FIXME: major in string is 3, however atoi returns 0
+        pversion.major = atoi(strings[0].c_str());
+        pversion.minor = atoi(strings[1].c_str());
+        pversion.bugfix = atoi(strings[2].c_str());
+        std::cout << "major = " << strings[0].c_str() << "  minor = " << strings[1] << "  bugfix = " << strings[2] << "\n";
+    }
 }

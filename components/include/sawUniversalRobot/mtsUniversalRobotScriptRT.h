@@ -66,6 +66,12 @@ protected:
     char buffer[1500];
     unsigned int buffer_idx;
 
+    struct PolyScopeVersion {
+        int major;
+        int minor;
+        int bugfix;
+    } pversion;
+
     // Packet structs for different versions
 #pragma pack(push, 1)     // Eliminate structure padding
     struct module1 {
@@ -207,7 +213,11 @@ protected:
     { conn = (UR_State != UR_NOT_CONNECTED); }
 
     void GetVersion(int &ver) const
-    { ver = static_cast<int>(version); }
+    {
+        ver = static_cast<int>(version);
+    }
+
+    void GetPolyscopeVersion(std::string &pver);
 
     // Connection Parameters
     // IP address (TCP/IP)
@@ -221,6 +231,7 @@ protected:
     unsigned short currentPort;
     // Socket to UR controller
     osaSocket socket;
+    osaSocket socketDB;    // Dashboard Server
 
     // Event generators
     mtsFunctionVoid SocketErrorEvent;
@@ -229,6 +240,9 @@ protected:
     void RobotNotReady(void);
     mtsFunctionVoid ReceiveTimeoutEvent;
     void ReceiveTimeout(void);
+
+    // return TRUE on success, FALSE on fail
+    bool SendAndReceive(std::string cmd, std::string &recv);
 
     mtsFunctionWrite PacketInvalid;
     mtsInterfaceProvided * mInterface;
