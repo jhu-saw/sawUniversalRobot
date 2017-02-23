@@ -20,6 +20,7 @@ http://www.cisst.org/cisst/license.txt.
 #include <cisstCommon/cmnUnits.h>
 #include <cisstCommon/cmnCommandLineOptions.h>
 #include <cisstMultiTask/mtsTaskManager.h>
+#include <cisstMultiTask/mtsMessageQtWidget.h>
 #include <sawUniversalRobot/mtsUniversalRobotScriptRT.h>
 
 #include <ros/ros.h>
@@ -83,30 +84,29 @@ int main(int argc, char * argv[])
     // ROS publisher
     std::string deviceName = "ur";
     rosBridge->AddPublisherFromCommandRead<prmPositionCartesianGet, geometry_msgs::PoseStamped>
-        ("Device", "GetPositionCartesian",
+        ("Component", "GetPositionCartesian",
          "/" + deviceName + "/position_cartesian_current");
 
-    rosBridge->AddLogFromEventWrite("Device", "Error",
+    rosBridge->AddLogFromEventWrite("Component", "Error",
                                     mtsROSEventWriteLog::ROS_LOG_ERROR);
-    rosBridge->AddLogFromEventWrite("Device", "Warning",
+    rosBridge->AddLogFromEventWrite("Component", "Warning",
                                     mtsROSEventWriteLog::ROS_LOG_WARN);
-    rosBridge->AddLogFromEventWrite("Device", "Status",
+    rosBridge->AddLogFromEventWrite("Component", "Status",
                                     mtsROSEventWriteLog::ROS_LOG_INFO);
 
-    // Qt Widget
-    #if 0
-    deviceWidget = new mtsForceDimensionQtWidget("device-gui");
-    deviceWidget->Configure();
-    componentManager->AddComponent(deviceWidget);
-    componentManager->Connect(deviceWidget->GetName(), "Device",
-                              device->GetName(), "Robot");
-    tabWidget->addTab(deviceWidget, "device");
-#endif
-    
     // add the bridge after all interfaces have been created
     componentManager->AddComponent(rosBridge);
-    componentManager->Connect(rosBridge->GetName(), "Device",
+    componentManager->Connect(rosBridge->GetName(), "Component",
                               device->GetName(), "control");
+
+    // Qt Widgets
+    // logs
+    mtsMessageQtWidgetComponent * messageWidget = new mtsMessageQtWidgetComponent("UR-Messages");
+    messageWidget->Configure();
+    componentManager->AddComponent(messageWidget);
+    componentManager->Connect(messageWidget->GetName(), "Component",
+                              device->GetName(), "control");
+    tabWidget->addTab(messageWidget, "Logs");
 
     // create and start all components
     componentManager->CreateAllAndWait(5.0 * cmn_s);

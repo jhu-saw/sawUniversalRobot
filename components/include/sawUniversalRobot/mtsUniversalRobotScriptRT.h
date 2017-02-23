@@ -222,8 +222,11 @@ protected:
     // Event generators
     mtsFunctionVoid SocketErrorEvent;
     void SocketError(void);
-    mtsFunctionVoid RobotNotReady;
-    mtsFunctionVoid ReceiveTimeout;
+    mtsFunctionVoid RobotNotReadyEvent;
+    void RobotNotReady(void);
+    mtsFunctionVoid ReceiveTimeoutEvent;
+    void ReceiveTimeout(void);
+
     mtsFunctionWrite PacketInvalid;
     mtsInterfaceProvided * mInterface;
 

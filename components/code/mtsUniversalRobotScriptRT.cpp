@@ -16,6 +16,7 @@ http://www.cisst.org/cisst/license.txt.
 */
 
 #include <stdio.h>
+#include <stdint.h>
 
 #include <cisstConfig.h>
 #include <cisstVector/vctRodriguezRotation3.h>
@@ -87,12 +88,12 @@ void mtsUniversalRobotScriptRT::Init(void)
     StateTable.AddData(TCPForce, "ForceCartesianForce");
     StateTable.AddData(WrenchGet, "ForceCartesianParam");
     StateTable.AddData(debug, "Debug");
-  
+
     mInterface = AddInterfaceProvided("control");
     if (mInterface) {
         // for Status, Warning and Error with mtsMessage
         mInterface->AddMessageEvents();
-        
+
         // Standard interfaces (same as dVRK)
         mInterface->AddCommandReadState(this->StateTable, JointPosParam, "GetPositionJoint");
         mInterface->AddCommandReadState(this->StateTable, JointTargetPos, "GetPositionJointDesired");
@@ -111,15 +112,15 @@ void mtsUniversalRobotScriptRT::Init(void)
         mInterface->AddCommandVoid(&mtsUniversalRobotScriptRT::DisableMotorPower, this, "DisableMotorPower");
         mInterface->AddCommandRead(&mtsUniversalRobotScriptRT::GetConnected, this, "GetConnected");
         mInterface->AddCommandRead(&mtsUniversalRobotScriptRT::GetAveragePeriod, this, "GetAveragePeriod");
-        mInterface->AddCommandVoid(&mtsUniversalRobotScriptRT::StopMotion, this, "StopMotion");  
+        mInterface->AddCommandVoid(&mtsUniversalRobotScriptRT::StopMotion, this, "StopMotion");
         mInterface->AddCommandVoid(&mtsUniversalRobotScriptRT::SetRobotRunningMode, this, "SetRobotRunningMode");
         mInterface->AddCommandVoid(&mtsUniversalRobotScriptRT::SetRobotFreeDriveMode, this, "SetRobotFreeDriveMode");
         mInterface->AddCommandReadState(StateTable, debug, "GetDebug");
         mInterface->AddCommandRead(&mtsUniversalRobotScriptRT::GetVersion, this, "GetVersion");
 
         mInterface->AddEventVoid(SocketErrorEvent, "SocketError");
-        mInterface->AddEventVoid(RobotNotReady, "RobotNotReady");
-        mInterface->AddEventVoid(ReceiveTimeout, "ReceiveTimeout");
+        mInterface->AddEventVoid(RobotNotReadyEvent, "RobotNotReady");
+        mInterface->AddEventVoid(ReceiveTimeoutEvent, "ReceiveTimeout");
         vctULong2 arg;
         mInterface->AddEventWrite(PacketInvalid, "PacketInvalid", arg);
     }
@@ -142,8 +143,9 @@ void mtsUniversalRobotScriptRT::Configure(const std::string &ipAddr)
             std::cout << "Connected" << std::endl;
             UR_State = UR_IDLE;
         }
-        else
+        else {
             CMN_LOG_CLASS_INIT_ERROR << "Socket not connected" << std::endl;
+        }
     }
 }
 
@@ -152,6 +154,9 @@ void mtsUniversalRobotScriptRT::Startup(void)
     if (UR_State != UR_NOT_CONNECTED) {
         // Flush any existing packets
         while (socket.Receive(buffer, sizeof(buffer)) > 0);
+        mInterface->SendStatus(this->GetName() + ": socket connected " + ipAddress);
+    } else {
+        mInterface->SendError(this->GetName() + ": socket not connected " + ipAddress);
     }
 }
 
@@ -166,7 +171,7 @@ void mtsUniversalRobotScriptRT::Run(void)
         // Call any connected components
         RunEvent();
         ProcessQueuedCommands();
-        osaSleep(0.008);
+        Sleep(0.008 * cmn_s);
         return;
     }
 
@@ -174,7 +179,7 @@ void mtsUniversalRobotScriptRT::Run(void)
     // larger than expected (should get packets every 8 msec). Thus, if we don't get
     // a packet, then we raise the ReceiveTimeout event.
     buffer[buffer_idx+0] = buffer[buffer_idx+1] = buffer[buffer_idx+2] = buffer[buffer_idx+3] = 0;
-    int numBytes = buffer_idx + socket.Receive(buffer+buffer_idx, sizeof(buffer)-buffer_idx, 0.1);
+    int numBytes = buffer_idx + socket.Receive(buffer+buffer_idx, sizeof(buffer)-buffer_idx, 0.1 * cmn_s);
     if (numBytes < 0) {
         buffer_idx = 0;
         SocketError();
@@ -192,11 +197,11 @@ void mtsUniversalRobotScriptRT::Run(void)
         return;
     }
 
-    unsigned long packageLength;
+    uint32_t packageLength;
     // Byteswap package length
     char *p = (char *)(&packageLength);
     p[0] = buffer[3]; p[1] = buffer[2]; p[2] = buffer[1]; p[3] = buffer[0];
-    if ((packageLength > 0) && (packageLength <= static_cast<unsigned long>(numBytes))) {
+    if ((packageLength > 0) && (packageLength <= static_cast<uint32_t>(numBytes))) {
         // Byteswap all the doubles in the package
         for (size_t i = 4; i < packageLength-4; i += 8) {
             for (size_t j = 0; j < 4; j++) {
@@ -295,7 +300,9 @@ void mtsUniversalRobotScriptRT::Run(void)
     }
     else {
         buffer_idx = 0;
-        std::cerr << "packet invalid" << std::endl;
+        std::cerr << "packet invalid>> len: " << packageLength << "   numByte: " << numBytes << std::endl;
+        // purge buffer
+        while (socket.Receive(buffer, sizeof(buffer)) > 0);
         //PacketInvalid(vctULong2(numBytes, packageLength));
     }
 
@@ -333,7 +340,7 @@ void mtsUniversalRobotScriptRT::Run(void)
 
     case UR_POS_MOVING:
         if (JointVel.Norm() == 0.0)
-            UR_State = UR_IDLE;  
+            UR_State = UR_IDLE;
         break;
 
     case UR_POWERING_ON:
@@ -355,7 +362,19 @@ void mtsUniversalRobotScriptRT::Cleanup(void)
 void mtsUniversalRobotScriptRT::SocketError(void)
 {
     SocketErrorEvent();
-    mInterface->SendError(this->GetName() + "@" + ipAddress + ": socket error");
+    mInterface->SendError(this->GetName() + ": socket error, IP: " + ipAddress);
+}
+
+void mtsUniversalRobotScriptRT::RobotNotReady(void)
+{
+    RobotNotReadyEvent();
+    mInterface->SendWarning(this->GetName() + ": robot not ready");
+}
+
+void mtsUniversalRobotScriptRT::ReceiveTimeout(void)
+{
+    ReceiveTimeoutEvent();
+    mInterface->SendError(this->GetName() + ": socket timeout");
 }
 
 void mtsUniversalRobotScriptRT::SetRobotFreeDriveMode(void)
