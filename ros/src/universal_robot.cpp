@@ -21,6 +21,7 @@ http://www.cisst.org/cisst/license.txt.
 #include <cisstCommon/cmnCommandLineOptions.h>
 #include <cisstMultiTask/mtsTaskManager.h>
 #include <cisstMultiTask/mtsMessageQtWidget.h>
+#include <cisstMultiTask/mtsIntervalStatisticsQtWidget.h>
 #include <sawUniversalRobot/mtsUniversalRobotScriptRT.h>
 
 #include <ros/ros.h>
@@ -87,6 +88,10 @@ int main(int argc, char * argv[])
         ("Component", "GetPositionCartesian",
          "/" + deviceName + "/position_cartesian_current");
 
+    rosBridge->AddPublisherFromCommandRead<prmStateJoint, sensor_msgs::JointState>
+        ("Component", "GetStateJoint",
+         "/" + deviceName + "/state_joint_current");
+
     rosBridge->AddLogFromEventWrite("Component", "Error",
                                     mtsROSEventWriteLog::ROS_LOG_ERROR);
     rosBridge->AddLogFromEventWrite("Component", "Warning",
@@ -101,12 +106,21 @@ int main(int argc, char * argv[])
 
     // Qt Widgets
     // logs
-    mtsMessageQtWidgetComponent * messageWidget = new mtsMessageQtWidgetComponent("UR-Messages");
+    mtsMessageQtWidgetComponent * messageWidget
+        = new mtsMessageQtWidgetComponent("UR-Messages");
     messageWidget->Configure();
     componentManager->AddComponent(messageWidget);
     componentManager->Connect(messageWidget->GetName(), "Component",
                               device->GetName(), "control");
     tabWidget->addTab(messageWidget, "Logs");
+
+    mtsIntervalStatisticsQtWidgetComponent * timeWidget
+        = new mtsIntervalStatisticsQtWidgetComponent("UR-Timing");
+    timeWidget->Configure();
+    componentManager->AddComponent(timeWidget);
+    componentManager->Connect(timeWidget->GetName(), "Component",
+                              device->GetName(), "control");
+    tabWidget->addTab(timeWidget, "Timing");
 
     // create and start all components
     componentManager->CreateAllAndWait(5.0 * cmn_s);
