@@ -34,8 +34,6 @@ http://www.cisst.org/cisst/license.txt.
 // Always include last
 #include <sawUniversalRobot/sawUniversalRobotExport.h>
 
-void CISST_EXPORT PrintPacketDebug(void);
-
 class CISST_EXPORT mtsUniversalRobotScriptRT : public mtsTaskContinuous
 {
     CMN_DECLARE_SERVICES(CMN_DYNAMIC_CREATION_ONEARG, CMN_LOG_ALLOW_VERBOSE)
