@@ -34,6 +34,8 @@ http://www.cisst.org/cisst/license.txt.
 // Always include last
 #include <sawUniversalRobot/sawUniversalRobotExport.h>
 
+void CISST_EXPORT PrintPacketDebug(void);
+
 class CISST_EXPORT mtsUniversalRobotScriptRT : public mtsTaskContinuous
 {
     CMN_DECLARE_SERVICES(CMN_DYNAMIC_CREATION_ONEARG, CMN_LOG_ALLOW_VERBOSE)
@@ -56,6 +58,14 @@ protected:
                       JOINT_MOTOR_INITIALISATION_MODE, JOINT_BOOTING_MODE,
                       JOINT_PART_D_CALIBRATION_ERROR_MODE, JOINT_BOOTLOADER_MODE,
                       JOINT_CALIBRATION_MODE, JOINT_FAULT_MODE, JOINT_RUNNING_MODE, JOINT_IDLE_MODE };
+
+    // This buffer must be large enough for largest packet size.
+    // According to documentation, port 30003 packets are up to 1060 bytes (Version 3.2)
+    // (On port 30001, have seen packets as large as 1295 bytes).
+    // We keep it less than twice the minimum packet length (764 bytes) so that we cannot
+    // accumulate more than one complete packet in the buffer.
+    char buffer[1500];
+    unsigned int buffer_idx;
 
     // Packet structs for different versions
 #pragma pack(push, 1)     // Eliminate structure padding
@@ -159,6 +169,7 @@ protected:
     enum FirmwareVersion {VER_UNKNOWN, VER_PRE_18, VER_18, VER_30_31, VER_32, VER_MAX};
     FirmwareVersion version;
     static unsigned long PacketLength[VER_MAX];
+    unsigned long PacketCount[VER_MAX];
 
     // Called by constructors
     void Init(void);

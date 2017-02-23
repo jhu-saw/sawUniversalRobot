@@ -38,13 +38,13 @@ unsigned long mtsUniversalRobotScriptRT::PacketLength[VER_MAX] = {
 };
 
 mtsUniversalRobotScriptRT::mtsUniversalRobotScriptRT(const std::string &name, unsigned int sizeStateTable, bool newThread) :
-    mtsTaskContinuous(name, sizeStateTable, newThread), version(VER_UNKNOWN)
+    mtsTaskContinuous(name, sizeStateTable, newThread), buffer_idx(0), version(VER_UNKNOWN)
 {
     Init();
 }
 
 mtsUniversalRobotScriptRT::mtsUniversalRobotScriptRT(const mtsTaskContinuousConstructorArg &arg) :
-    mtsTaskContinuous(arg), version(VER_UNKNOWN)
+    mtsTaskContinuous(arg), buffer_idx(0), version(VER_UNKNOWN)
 {
     Init();
 }
@@ -123,6 +123,9 @@ void mtsUniversalRobotScriptRT::Init(void)
         vctULong2 arg;
         mInterface->AddEventWrite(PacketInvalid, "PacketInvalid", arg);
     }
+
+    for (size_t i = 0; i < VER_MAX; i++)
+        PacketCount[i] = 0;
 }
 
 void mtsUniversalRobotScriptRT::Configure(const std::string &ipAddr)
@@ -147,7 +150,6 @@ void mtsUniversalRobotScriptRT::Configure(const std::string &ipAddr)
 void mtsUniversalRobotScriptRT::Startup(void)
 {
     if (UR_State != UR_NOT_CONNECTED) {
-        char buffer[2048];
         // Flush any existing packets
         while (socket.Receive(buffer, sizeof(buffer)) > 0);
     }
@@ -155,11 +157,6 @@ void mtsUniversalRobotScriptRT::Startup(void)
 
 void mtsUniversalRobotScriptRT::Run(void)
 {
-    // This buffer must be large enough for largest packet size.
-    // According to documentation, port 30003 packets are up to 1060 bytes (Version 3.2)
-    // (On port 30001, have seen packets as large as 1295 bytes).
-    char buffer[2048];
-
     // Turn this on to enable sanity check of time difference.
     //bool timeCheckEnabled = (ControllerTime != 0);
     bool timeCheckEnabled = false;
@@ -176,9 +173,10 @@ void mtsUniversalRobotScriptRT::Run(void)
     // Receive a packet with timeout. We choose a timeout of 100 msec, which is much
     // larger than expected (should get packets every 8 msec). Thus, if we don't get
     // a packet, then we raise the ReceiveTimeout event.
-    buffer[0] = buffer[1] = buffer[2] = buffer[3] = 0;
-    int numBytes = socket.Receive(buffer, sizeof(buffer), 0.1);
+    buffer[buffer_idx+0] = buffer[buffer_idx+1] = buffer[buffer_idx+2] = buffer[buffer_idx+3] = 0;
+    int numBytes = buffer_idx + socket.Receive(buffer+buffer_idx, sizeof(buffer)-buffer_idx, 0.1);
     if (numBytes < 0) {
+        buffer_idx = 0;
         SocketError();
         socket.Close();
         UR_State = UR_NOT_CONNECTED;
@@ -186,7 +184,8 @@ void mtsUniversalRobotScriptRT::Run(void)
         ProcessQueuedCommands();
         return;
     }
-    if (numBytes == 0) {
+    else if (numBytes == 0) {
+        buffer_idx = 0;
         ReceiveTimeout();
         RunEvent();
         ProcessQueuedCommands();
@@ -198,7 +197,6 @@ void mtsUniversalRobotScriptRT::Run(void)
     char *p = (char *)(&packageLength);
     p[0] = buffer[3]; p[1] = buffer[2]; p[2] = buffer[1]; p[3] = buffer[0];
     if ((packageLength > 0) && (packageLength <= static_cast<unsigned long>(numBytes))) {
-    // if (packageLength == static_cast<unsigned long>(numBytes)) {
         // Byteswap all the doubles in the package
         for (size_t i = 4; i < packageLength-4; i += 8) {
             for (size_t j = 0; j < 4; j++) {
@@ -207,14 +205,29 @@ void mtsUniversalRobotScriptRT::Run(void)
                 buffer[i + 7 - j] = tmp;
             }
         }
-        if (version == VER_UNKNOWN) {
-            for (int i = VER_UNKNOWN+1; i < VER_MAX; i++) {
-                if (packageLength == PacketLength[i]) {
+        // Check against expected versions. Even if we already know which version of firmware
+        // we are communicating with, we keep checking in case we made a mistake. This also
+        // collects useful debug data.
+        int i;
+        for (i = VER_UNKNOWN+1; i < VER_MAX; i++) {
+            if (packageLength == PacketLength[i]) {
+                PacketCount[i]++;
+                if (version == VER_UNKNOWN)
                     version = static_cast<FirmwareVersion>(i);
-                    break;
+                else if (i != version) {
+                    // Could we have auto-detected the wrong version?
+                    if (PacketCount[i] > PacketCount[version]) {
+                        CMN_LOG_CLASS_RUN_WARNING << "Switching from version " << version
+                                                  << " to version " << i << std::endl;
+                        version = static_cast<FirmwareVersion>(i);
+                    }
                 }
+                break;
             }
         }
+        // If we didn't find a match above, increment the VER_UNKNOWN packet counter
+        if (i == VER_MAX)
+            PacketCount[VER_UNKNOWN]++;
         if (version != VER_UNKNOWN) {
             if (packageLength < PacketLength[version]) {
                 debug[2] += 1;
@@ -269,11 +282,21 @@ void mtsUniversalRobotScriptRT::Run(void)
                 vctFrm3 frm(cartRot, position);
                 CartPos.SetPosition(frm);
             }
+            // Finished with packet; now preserve any extra data for next time
+            if (packageLength < static_cast<unsigned long>(numBytes)) {
+                memmove(buffer, buffer+packageLength, numBytes-packageLength);
+                buffer_idx = numBytes-packageLength;
+            }
+            else
+                buffer_idx = 0;
         }
+        else
+            buffer_idx = 0;
     }
     else {
+        buffer_idx = 0;
         std::cerr << "packet invalid" << std::endl;
-        PacketInvalid(vctULong2(numBytes, packageLength));
+        //PacketInvalid(vctULong2(numBytes, packageLength));
     }
 
     // Advance the state table now, so that any connected components can get
