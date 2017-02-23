@@ -21,6 +21,7 @@ http://www.cisst.org/cisst/license.txt.
 #include <cisstVector/vctTypes.h>
 #include <cisstOSAbstraction/osaSocket.h>
 #include <cisstMultiTask/mtsTaskContinuous.h>
+#include <cisstParameterTypes/prmStateJoint.h>
 #include <cisstParameterTypes/prmPositionJointGet.h>
 #include <cisstParameterTypes/prmPositionJointSet.h>
 #include <cisstParameterTypes/prmPositionCartesianGet.h>
@@ -147,6 +148,8 @@ protected:
     vctDoubleVec JointVel;                // Actual joint velocity
     prmVelocityJointGet JointVelParam;    // Actual joint velocity (standard payload)
     vctDoubleVec JointTargetVel;          // Desired joint velocity (feedback)
+
+    prmStateJoint JointState;
 
     prmPositionCartesianGet CartPos;      // Actual Cartesian position (standard payload)
     vct6 TCPSpeed;                        // Actual Cartesian velocity

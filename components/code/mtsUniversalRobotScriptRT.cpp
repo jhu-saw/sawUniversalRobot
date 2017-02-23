@@ -71,6 +71,15 @@ void mtsUniversalRobotScriptRT::Init(void)
     JointVelParam.SetSize(NB_Actuators);
     JointTargetVel.SetSize(NB_Actuators);
     JointTargetVel.SetAll(0.0);
+    JointState.Name().SetSize(NB_Actuators);
+    JointState.Name()[0] = "shoulder_pan_joint";
+    JointState.Name()[1] = "shoulder_lift_joint";
+    JointState.Name()[2] = "elbow_joint";
+    JointState.Name()[3] = "wrist_1_joint";
+    JointState.Name()[4] = "wrist_2_joint";
+    JointState.Name()[5] = "wrist_3_joint";
+    JointState.Position().ForceAssign(JointPos);
+    JointState.Velocity().ForceAssign(JointVel);
     TCPSpeed.SetAll(0.0);
     TCPForce.SetAll(0.0);
     debug.SetAll(0.0);
@@ -82,6 +91,7 @@ void mtsUniversalRobotScriptRT::Init(void)
     StateTable.AddData(JointVel, "VelocityJoint");
     StateTable.AddData(JointVelParam, "VelocityJointParam");
     StateTable.AddData(JointTargetVel, "VelocityTargetJoint");
+    StateTable.AddData(JointState, "JointState");
     StateTable.AddData(CartPos, "PositionCartesian");
     StateTable.AddData(TCPSpeed, "VelocityCartesian");
     StateTable.AddData(CartVelParam, "VelocityCartesianParam");
@@ -98,6 +108,7 @@ void mtsUniversalRobotScriptRT::Init(void)
         mInterface->AddCommandReadState(this->StateTable, JointPosParam, "GetPositionJoint");
         mInterface->AddCommandReadState(this->StateTable, JointTargetPos, "GetPositionJointDesired");
         mInterface->AddCommandReadState(this->StateTable, JointVelParam, "GetVelocityJoint");
+        mInterface->AddCommandReadState(this->StateTable, JointState, "GetStateJoint");
         mInterface->AddCommandReadState(this->StateTable, CartPos, "GetPositionCartesian");
         mInterface->AddCommandReadState(this->StateTable, CartVelParam, "GetVelocityCartesian");
         mInterface->AddCommandReadState(this->StateTable, WrenchGet, "GetWrenchBody");
@@ -123,6 +134,10 @@ void mtsUniversalRobotScriptRT::Init(void)
         mInterface->AddEventVoid(ReceiveTimeoutEvent, "ReceiveTimeout");
         vctULong2 arg;
         mInterface->AddEventWrite(PacketInvalid, "PacketInvalid", arg);
+
+        // Stats
+        mInterface->AddCommandReadState(StateTable, StateTable.PeriodStats,
+                                        "GetPeriodStatistics");
     }
 
     for (size_t i = 0; i < VER_MAX; i++)
@@ -175,11 +190,11 @@ void mtsUniversalRobotScriptRT::Run(void)
         return;
     }
 
-    // Receive a packet with timeout. We choose a timeout of 100 msec, which is much
+    // Receive a packet with timeout. We choose a timeout of 500 msec, which is much
     // larger than expected (should get packets every 8 msec). Thus, if we don't get
     // a packet, then we raise the ReceiveTimeout event.
     buffer[buffer_idx+0] = buffer[buffer_idx+1] = buffer[buffer_idx+2] = buffer[buffer_idx+3] = 0;
-    int numBytes = buffer_idx + socket.Receive(buffer+buffer_idx, sizeof(buffer)-buffer_idx, 0.1 * cmn_s);
+    int numBytes = buffer_idx + socket.Receive(buffer+buffer_idx, sizeof(buffer)-buffer_idx, 0.5 * cmn_s);
     if (numBytes < 0) {
         buffer_idx = 0;
         SocketError();
@@ -260,6 +275,8 @@ void mtsUniversalRobotScriptRT::Run(void)
                 JointPosParam.SetPosition(JointPos);
                 JointVel.Assign(base1->qdActual);
                 JointVelParam.SetVelocity(JointVel);
+                JointState.Position().Assign(JointPos);
+                JointState.Velocity().Assign(JointVel);
             }
             module2 *base2 = (version <= VER_18) ? (module2 *)(&((packet_pre_3 *)buffer)->base2)
                                                  : (module2 *)(&((packet_30_31 *)buffer)->base2);
@@ -300,10 +317,10 @@ void mtsUniversalRobotScriptRT::Run(void)
     }
     else {
         buffer_idx = 0;
-        std::cerr << "packet invalid>> len: " << packageLength << "   numByte: " << numBytes << std::endl;
+        PacketInvalid(vctULong2(numBytes, packageLength));
+        mInterface->SendError(this->GetName() + ": invalid package");
         // purge buffer
         while (socket.Receive(buffer, sizeof(buffer)) > 0);
-        //PacketInvalid(vctULong2(numBytes, packageLength));
     }
 
     // Advance the state table now, so that any connected components can get
