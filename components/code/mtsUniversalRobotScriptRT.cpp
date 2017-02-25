@@ -131,7 +131,6 @@ mtsUniversalRobotScriptRT::mtsUniversalRobotScriptRT(const mtsTaskContinuousCons
 mtsUniversalRobotScriptRT::~mtsUniversalRobotScriptRT()
 {
     socket.Close();
-    socketDB.Close();
 }
 
 void mtsUniversalRobotScriptRT::Init(void)
@@ -150,6 +149,11 @@ void mtsUniversalRobotScriptRT::Init(void)
     JointVelParam.SetSize(NB_Actuators);
     JointTargetVel.SetSize(NB_Actuators);
     JointTargetVel.SetAll(0.0);
+    JointEffort.SetSize(NB_Actuators);
+    JointEffort.SetAll(0.0);
+    JointTargetEffort.SetSize(NB_Actuators);
+    JointTargetEffort.SetAll(0.0);
+
     JointState.Name().SetSize(NB_Actuators);
     JointState.Name()[0] = "shoulder_pan_joint";
     JointState.Name()[1] = "shoulder_lift_joint";
@@ -159,6 +163,7 @@ void mtsUniversalRobotScriptRT::Init(void)
     JointState.Name()[5] = "wrist_3_joint";
     JointState.Position().ForceAssign(JointPos);
     JointState.Velocity().ForceAssign(JointVel);
+    JointState.Effort().ForceAssign(JointEffort);
     TCPSpeed.SetAll(0.0);
     TCPForce.SetAll(0.0);
     debug.SetAll(0.0);
@@ -241,15 +246,10 @@ void mtsUniversalRobotScriptRT::Configure(const std::string &ipAddr)
         else {
             CMN_LOG_CLASS_INIT_ERROR << "Socket not connected" << std::endl;
         }
-
-        if (socketDB.Connect(ipAddress.c_str(), 29999)) {
-            std::cout << "Connected to Dashboard Server" << std::endl;
-        }
-        else {
-            CMN_LOG_CLASS_INIT_ERROR << "Socket not connected to dashboard server" << std::endl;
-        }
-
     }
+
+//    std::string pver;
+//    GetPolyscopeVersion(pver);
 }
 
 void mtsUniversalRobotScriptRT::Startup(void)
@@ -262,8 +262,8 @@ void mtsUniversalRobotScriptRT::Startup(void)
         mInterface->SendError(this->GetName() + ": socket not connected " + ipAddress);
     }
 
-    std::string pver;
-    GetPolyscopeVersion(pver);
+//    std::string pver;
+//    GetPolyscopeVersion(pver);
 }
 
 void mtsUniversalRobotScriptRT::Run(void)
@@ -366,8 +366,12 @@ void mtsUniversalRobotScriptRT::Run(void)
                 JointPosParam.SetPosition(JointPos);
                 JointVel.Assign(base1->qdActual);
                 JointVelParam.SetVelocity(JointVel);
+                JointEffort.Assign(base1->I_Actual);
+                JointTargetEffort.Assign(base1->I_Target);
+
                 JointState.Position().Assign(JointPos);
                 JointState.Velocity().Assign(JointVel);
+                JointState.Effort().Assign(JointEffort);
             }
             module2 *base2 = (version <= VER_18) ? (module2 *)(&((packet_pre_3 *)buffer)->base2)
                                                  : (module2 *)(&((packet_30_31 *)buffer)->base2);
@@ -484,12 +488,12 @@ void mtsUniversalRobotScriptRT::ReceiveTimeout(void)
 }
 
 
-bool mtsUniversalRobotScriptRT::SendAndReceive(std::string cmd, std::string &recv)
+bool mtsUniversalRobotScriptRT::SendAndReceive(osaSocket &socket, std::string cmd, std::string &recv)
 {
     char buf[100];
-    if (socketDB.Send(cmd) < 0) return false;
+    if (socket.Send(cmd) < 0) return false;
     osaSleep(0.1);   // wait for reply
-    if (socketDB.Receive(buf, 100) < 0) return false;
+    if (socket.Receive(buf, 100) < 0) return false;
 
     recv = buf;
     return true;
@@ -502,14 +506,14 @@ void mtsUniversalRobotScriptRT::SetRobotFreeDriveMode(void)
         if (version < VER_30_31) {
             ret = socket.Send("set robotmode freedrive\n");
         } else {
-            ret = socket.Send("def myProg():\n\tfreedrive_mode()\nsleep(200)\nend\n");
+            ret = socket.Send("def saw_ur_freedrive():\n\tfreedrive_mode()\nsleep(20)\nend\n");
         }
 
         if (ret == -1) {
             SocketError();
         } else {
             UR_State = UR_FREE_DRIVE;
-            std::cout << "====== set freedrive mode ====== \n";
+            mInterface->SendStatus(this->GetName() + ": set freedrive mode");
         }
     }
     else
@@ -530,6 +534,7 @@ void mtsUniversalRobotScriptRT::SetRobotRunningMode(void)
             SocketError();
         } else {
             UR_State = UR_IDLE;
+            mInterface->SendStatus(this->GetName() + ": set running mode");
         }
     }
     else
@@ -641,8 +646,15 @@ void mtsUniversalRobotScriptRT::StopMotion(void)
 
 void mtsUniversalRobotScriptRT::GetPolyscopeVersion(std::string &pver)
 {
-    bool ret;
-    ret = SendAndReceive("PolyscopeVersion\n", pver);
+    osaSocket socketDB;    // Dashboard Server
+    if (socketDB.Connect(ipAddress.c_str(), 29999)) {
+        std::cout << "Connected to Dashboard Server" << std::endl;
+    }
+    else {
+        CMN_LOG_CLASS_INIT_ERROR << "Socket not connected to dashboard server" << std::endl;
+    }
+
+    SendAndReceive(socketDB, "PolyscopeVersion\n", pver);
 
     std::vector<std::string> strings;
     std::string s;
@@ -661,4 +673,6 @@ void mtsUniversalRobotScriptRT::GetPolyscopeVersion(std::string &pver)
         pversion.bugfix = atoi(strings[2].c_str());
         std::cout << "major = " << strings[0].c_str() << "  minor = " << strings[1] << "  bugfix = " << strings[2] << "\n";
     }
+
+    socketDB.Close();
 }

@@ -40,6 +40,11 @@ int main(int argc, char * argv[])
     cmnLogger::SetMaskClassMatching("mtsForceDimensionSDK", CMN_LOG_ALLOW_ALL);
     cmnLogger::AddChannel(std::cerr, CMN_LOG_ALLOW_ERRORS_AND_WARNINGS);
 
+    // remove ROS args
+    ros::V_string argout;
+    ros::removeROSArgs(argc, argv, argout);
+    argc = argout.size();
+
     // parse options
     cmnCommandLineOptions options;
     std::string ipAddress;
@@ -50,7 +55,7 @@ int main(int argc, char * argv[])
                               cmnCommandLineOptions::REQUIRED_OPTION, &ipAddress);
     options.AddOptionOneValue("p", "ros-period",
                               "period in seconds to read all tool positions (default 0.01, 10 ms, 100Hz).  There is no point to have a period higher than the tracker component",
-                              cmnCommandLineOptions::OPTIONAL_OPTION, &rosPeriod);
+                              cmnCommandLineOptions::OPTIONAL_OPTION, &rosPeriod);    
 
     // check that all required options have been provided
     std::string errorMessage;
@@ -83,14 +88,20 @@ int main(int argc, char * argv[])
     // configure all components
 
     // ROS publisher
-    std::string deviceName = "ur";
     rosBridge->AddPublisherFromCommandRead<prmPositionCartesianGet, geometry_msgs::PoseStamped>
         ("Component", "GetPositionCartesian",
-         "/" + deviceName + "/position_cartesian_current");
+         "position_cartesian_current");
 
     rosBridge->AddPublisherFromCommandRead<prmStateJoint, sensor_msgs::JointState>
         ("Component", "GetStateJoint",
-         "/" + deviceName + "/state_joint_current");
+         "joint_states");
+
+    rosBridge->AddSubscriberToCommandVoid("Component", "SetRobotFreeDriveMode", "SetRobotFreeDriveMode");
+    rosBridge->AddSubscriberToCommandVoid("Component", "SetRobotRunningMode", "SetRobotRunningMode");
+    rosBridge->AddSubscriberToCommandWrite<prmVelocityJointSet, sensor_msgs::JointState>
+            ("Component", "JointVelocityMove", "JointVelocityMove");
+    rosBridge->AddSubscriberToCommandWrite<prmVelocityCartesianSet, geometry_msgs::TwistStamped>
+            ("Component", "CartesianVelocityMove", "CartesianVelocityMove");
 
     rosBridge->AddLogFromEventWrite("Component", "Error",
                                     mtsROSEventWriteLog::ROS_LOG_ERROR);

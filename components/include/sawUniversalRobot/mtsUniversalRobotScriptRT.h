@@ -84,6 +84,9 @@ protected:
     prmVelocityJointGet JointVelParam;    // Actual joint velocity (standard payload)
     vctDoubleVec JointTargetVel;          // Desired joint velocity (feedback)
 
+    vctDoubleVec JointEffort;             // Actual joint current
+    vctDoubleVec JointTargetEffort;       // Desired joint current
+
     prmStateJoint JointState;
 
     prmPositionCartesianGet CartPos;      // Actual Cartesian position (standard payload)
@@ -160,7 +163,6 @@ protected:
     unsigned short currentPort;
     // Socket to UR controller
     osaSocket socket;
-    osaSocket socketDB;    // Dashboard Server
 
     // Event generators
     mtsFunctionVoid SocketErrorEvent;
@@ -171,7 +173,7 @@ protected:
     void ReceiveTimeout(void);
 
     // return TRUE on success, FALSE on fail
-    bool SendAndReceive(std::string cmd, std::string &recv);
+    bool SendAndReceive(osaSocket &socket, std::string cmd, std::string &recv);
 
     mtsFunctionWrite PacketInvalid;
     mtsInterfaceProvided * mInterface;
