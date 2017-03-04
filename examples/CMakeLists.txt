@@ -9,11 +9,31 @@
 #
 # --- end cisst license ---
 
-add_subdirectory(ConsoleTest)
+cmake_minimum_required (VERSION 2.8)
+project (sawUniversalRobotExamples)
 
-# Copy python file to the bin directory
-add_custom_target(sawUniversalRobot ALL
-                  ${CMAKE_COMMAND} -E copy
-                  ${CMAKE_CURRENT_SOURCE_DIR}/python/ur_robot.py
-                  ${EXECUTABLE_OUTPUT_PATH}/${CMAKE_CFG_INTDIR}/ur_robot.py
-                  COMMENT "Copying ur_robot.py to ${EXECUTABLE_OUTPUT_PATH}/${CMAKE_CFG_INTDIR}")
+add_subdirectory (ConsoleTest)
+
+# Find cisst to define catkin macros so we can define the executable
+# output path
+find_package (cisst 1.0.6 REQUIRED)
+
+if (cisst_FOUND)
+
+  # Load cisst configuration
+  include (${CISST_USE_FILE})
+
+  # catkin/ROS paths
+  cisst_is_catkin_build (sawUniversalRobot_IS_CATKIN_BUILT)
+  if (sawUniversalRobot_IS_CATKIN_BUILT)
+    set (EXECUTABLE_OUTPUT_PATH "${CATKIN_DEVEL_PREFIX}/bin")
+    set (LIBRARY_OUTPUT_PATH    "${CATKIN_DEVEL_PREFIX}/lib")
+  endif ()
+
+  # Copy python file to the bin directory
+  add_custom_target (sawUniversalRobotExamples ALL
+                     ${CMAKE_COMMAND} -E copy
+                     ${CMAKE_CURRENT_SOURCE_DIR}/python/ur_robot.py
+                     ${EXECUTABLE_OUTPUT_PATH}/${CMAKE_CFG_INTDIR}/ur_robot.py
+                     COMMENT "Copying ur_robot.py to ${EXECUTABLE_OUTPUT_PATH}/${CMAKE_CFG_INTDIR}")
+endif (cisst_FOUND)

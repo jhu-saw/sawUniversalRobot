@@ -21,6 +21,7 @@ http://www.cisst.org/cisst/license.txt.
 #include <cisstVector/vctTypes.h>
 #include <cisstOSAbstraction/osaSocket.h>
 #include <cisstMultiTask/mtsTaskContinuous.h>
+#include <cisstParameterTypes/prmStateJoint.h>
 #include <cisstParameterTypes/prmPositionJointGet.h>
 #include <cisstParameterTypes/prmPositionJointSet.h>
 #include <cisstParameterTypes/prmPositionCartesianGet.h>
@@ -57,76 +58,19 @@ protected:
                       JOINT_PART_D_CALIBRATION_ERROR_MODE, JOINT_BOOTLOADER_MODE,
                       JOINT_CALIBRATION_MODE, JOINT_FAULT_MODE, JOINT_RUNNING_MODE, JOINT_IDLE_MODE };
 
-    // Packet structs for different versions
-#pragma pack(push, 1)     // Eliminate structure padding
-    struct module1 {
-        unsigned int messageSize;
-        double time;          // Time elapsed since controller was started
-        double qTarget[6];    // Target joint positions
-        double qdTarget[6];   // Target joint velocities
-        double qddTarget[6];  // Target joint accelerations
-        double I_Target[6];   // Target joint currents
-        double M_Target[6];   // Target joint torques
-        double qActual[6];    // Actual joint positions
-        double qdActual[6];   // Actual joint velocities
-        double I_Actual[6];   // Actual joint currents
-    };
-#pragma pack(pop)
+    // This buffer must be large enough for largest packet size.
+    // According to documentation, port 30003 packets are up to 1060 bytes (Version 3.2)
+    // (On port 30001, have seen packets as large as 1295 bytes).
+    // We keep it less than twice the minimum packet length (764 bytes) so that we cannot
+    // accumulate more than one complete packet in the buffer.
+    char buffer[1500];
+    unsigned int buffer_idx;
 
-#pragma pack(push, 1) 
-    struct module2 {
-        unsigned long long digital_Input;  // Digital input bitmask
-        double motor_Tem[6];      // Joint temperatures (degC)
-        double controller_Time;   // Controller real-time thread execution time
-        double test_Val;          // UR internal use only
-        double robot_Mode;        // Robot mode (see RobotModes enum)
-        double joint_Modes[6];    // Joint control modes (Version 1.8+, see JointModes enum)
-    };
-#pragma pack(pop)
-
-#pragma pack(push, 1) 
-    struct packet_pre_3 {
-        module1 base1;
-        double tool_Accele[3];    // Tool accelerometer values (Version 1.7+)
-        double blank[15];         // Unused
-        double TCP_force[6];      // Generalized forces in the TCP
-        double tool_Vector[6];    // Tool Cartesian pose (x, y, z, rx, ry, rz)
-        double TCP_speed[6];      // Tool Cartesian speed
-        module2 base2;
-    };
-#pragma pack(pop)
-
-#pragma pack(push, 1) 
-    struct packet_30_31 {
-        module1 base1;
-        double I_ctrl[6];         // Joint control currents
-        double tool_vec_Act[6];   // Actual tool Cartesian pose (x, y, z, rx, ry, rz)
-        double TCP_speed_Act[6];  // Actual tool Cartesian speed
-        double TCP_force[6];      // Generalized forces in the TCP
-        double tool_vec_Tar[6];   // Target tool Cartesian pose (x, y, z, rx, ry, rz)
-        double TCP_speed_Tar[6];  // Target tool Cartesian speed
-        module2 base2;
-        double safety_Mode;       // Safety mode
-        double blank1[6];         // UR software only
-        double tool_Accele[3];    // Tool accelerometer values
-        double blank2[6];         // UR software only
-        double speed_Scal;        // Speed scaling of trajectory limiter
-        double linear_M_norm;     // Norm of Cartesian linear momentum
-        double blank3;            // UR software only
-        double blank4;            // UR software only
-        double V_main;            // Masterboard main voltage
-        double V_robot;           // Masterboard robot voltage (48V)
-        double I_robot;           // Masterboard robot current
-        double V_joint_Act[6];    // Actual joint voltages
-    };
-#pragma pack(pop)
-
-#pragma pack(push, 1) 
-    struct packet_32 : packet_30_31 {
-        unsigned long long digital_Output; // Digital outputs
-        double program_State;     // Program state
-    };
-#pragma pack(pop)
+    struct PolyScopeVersion {
+        int major;
+        int minor;
+        int bugfix;
+    } pversion;
 
     // State table entries
     double ControllerTime;
@@ -139,6 +83,11 @@ protected:
     vctDoubleVec JointVel;                // Actual joint velocity
     prmVelocityJointGet JointVelParam;    // Actual joint velocity (standard payload)
     vctDoubleVec JointTargetVel;          // Desired joint velocity (feedback)
+
+    vctDoubleVec JointEffort;             // Actual joint current
+    vctDoubleVec JointTargetEffort;       // Desired joint current
+
+    prmStateJoint JointState;
 
     prmPositionCartesianGet CartPos;      // Actual Cartesian position (standard payload)
     vct6 TCPSpeed;                        // Actual Cartesian velocity
@@ -154,11 +103,12 @@ protected:
 
     // For real-time debugging
     vct6 debug;
-    
+
     // For UR version determination
     enum FirmwareVersion {VER_UNKNOWN, VER_PRE_18, VER_18, VER_30_31, VER_32, VER_MAX};
     FirmwareVersion version;
     static unsigned long PacketLength[VER_MAX];
+    unsigned long PacketCount[VER_MAX];
 
     // Called by constructors
     void Init(void);
@@ -195,7 +145,11 @@ protected:
     { conn = (UR_State != UR_NOT_CONNECTED); }
 
     void GetVersion(int &ver) const
-    { ver = static_cast<int>(version); }
+    {
+        ver = static_cast<int>(version);
+    }
+
+    void GetPolyscopeVersion(std::string &pver);
 
     // Connection Parameters
     // IP address (TCP/IP)
@@ -211,12 +165,20 @@ protected:
     osaSocket socket;
 
     // Event generators
-    mtsFunctionVoid SocketError;
-    mtsFunctionVoid RobotNotReady;
-    mtsFunctionVoid ReceiveTimeout;
-    mtsFunctionWrite PacketInvalid;
+    mtsFunctionVoid SocketErrorEvent;
+    void SocketError(void);
+    mtsFunctionVoid RobotNotReadyEvent;
+    void RobotNotReady(void);
+    mtsFunctionVoid ReceiveTimeoutEvent;
+    void ReceiveTimeout(void);
 
-public:  
+    // return TRUE on success, FALSE on fail
+    bool SendAndReceive(osaSocket &socket, std::string cmd, std::string &recv);
+
+    mtsFunctionWrite PacketInvalid;
+    mtsInterfaceProvided * mInterface;
+
+public:
 
     mtsUniversalRobotScriptRT(const std::string &name, unsigned int sizeStateTable = 256, bool newThread = true);
 

@@ -16,8 +16,16 @@ http://www.cisst.org/cisst/license.txt.
 */
 
 #include <stdio.h>
+#include <stdlib.h>
 
-#include <cisstConfig.h>
+#include <cisstCommon/cmnPortability.h>
+
+#if (CISST_OS == CISST_WINDOWS)
+typedef unsigned __int32 uint32_t;
+#else
+#include <stdint.h>
+#endif
+
 #include <cisstVector/vctRodriguezRotation3.h>
 #include <cisstMultiTask/mtsInterfaceProvided.h>
 #include <cisstOSAbstraction/osaSleep.h>
@@ -26,6 +34,77 @@ http://www.cisst.org/cisst/license.txt.
 const double MAX_VELOCITY = 12.0*cmnPI_180;
 const double MIN_VELOCITY = 0.001*cmnPI_180;
 const double MAX_ACCELERATION = 4.0*cmnPI_180;
+
+// Packet structs for different versions
+#pragma pack(push, 1)     // Eliminate structure padding
+struct module1 {
+    uint32_t messageSize;
+    double time;          // Time elapsed since controller was started
+    double qTarget[6];    // Target joint positions
+    double qdTarget[6];   // Target joint velocities
+    double qddTarget[6];  // Target joint accelerations
+    double I_Target[6];   // Target joint currents
+    double M_Target[6];   // Target joint torques
+    double qActual[6];    // Actual joint positions
+    double qdActual[6];   // Actual joint velocities
+    double I_Actual[6];   // Actual joint currents
+};
+#pragma pack(pop)
+
+#pragma pack(push, 1)
+struct module2 {
+    unsigned long long digital_Input;  // Digital input bitmask
+    double motor_Tem[6];      // Joint temperatures (degC)
+    double controller_Time;   // Controller real-time thread execution time
+    double test_Val;          // UR internal use only
+    double robot_Mode;        // Robot mode (see RobotModes enum)
+    double joint_Modes[6];    // Joint control modes (Version 1.8+, see JointModes enum)
+};
+#pragma pack(pop)
+
+#pragma pack(push, 1)
+struct packet_pre_3 {
+    module1 base1;
+    double tool_Accele[3];    // Tool accelerometer values (Version 1.7+)
+    double blank[15];         // Unused
+    double TCP_force[6];      // Generalized forces in the TCP
+    double tool_Vector[6];    // Tool Cartesian pose (x, y, z, rx, ry, rz)
+    double TCP_speed[6];      // Tool Cartesian speed
+    module2 base2;
+};
+#pragma pack(pop)
+
+#pragma pack(push, 1)
+struct packet_30_31 {
+    module1 base1;
+    double I_ctrl[6];         // Joint control currents
+    double tool_vec_Act[6];   // Actual tool Cartesian pose (x, y, z, rx, ry, rz)
+    double TCP_speed_Act[6];  // Actual tool Cartesian speed
+    double TCP_force[6];      // Generalized forces in the TCP
+    double tool_vec_Tar[6];   // Target tool Cartesian pose (x, y, z, rx, ry, rz)
+    double TCP_speed_Tar[6];  // Target tool Cartesian speed
+    module2 base2;
+    double safety_Mode;       // Safety mode
+    double blank1[6];         // UR software only
+    double tool_Accele[3];    // Tool accelerometer values
+    double blank2[6];         // UR software only
+    double speed_Scal;        // Speed scaling of trajectory limiter
+    double linear_M_norm;     // Norm of Cartesian linear momentum
+    double blank3;            // UR software only
+    double blank4;            // UR software only
+    double V_main;            // Masterboard main voltage
+    double V_robot;           // Masterboard robot voltage (48V)
+    double I_robot;           // Masterboard robot current
+    double V_joint_Act[6];    // Actual joint voltages
+};
+#pragma pack(pop)
+
+#pragma pack(push, 1)
+struct packet_32 : packet_30_31 {
+    unsigned long long digital_Output; // Digital outputs
+    double program_State;     // Program state
+};
+#pragma pack(pop)
 
 CMN_IMPLEMENT_SERVICES_DERIVED_ONEARG(mtsUniversalRobotScriptRT, mtsTaskContinuous, mtsTaskContinuousConstructorArg)
 
@@ -38,13 +117,13 @@ unsigned long mtsUniversalRobotScriptRT::PacketLength[VER_MAX] = {
 };
 
 mtsUniversalRobotScriptRT::mtsUniversalRobotScriptRT(const std::string &name, unsigned int sizeStateTable, bool newThread) :
-    mtsTaskContinuous(name, sizeStateTable, newThread), version(VER_UNKNOWN)
+    mtsTaskContinuous(name, sizeStateTable, newThread), buffer_idx(0), version(VER_UNKNOWN)
 {
     Init();
 }
 
 mtsUniversalRobotScriptRT::mtsUniversalRobotScriptRT(const mtsTaskContinuousConstructorArg &arg) :
-    mtsTaskContinuous(arg), version(VER_UNKNOWN)
+    mtsTaskContinuous(arg), buffer_idx(0), version(VER_UNKNOWN)
 {
     Init();
 }
@@ -70,6 +149,21 @@ void mtsUniversalRobotScriptRT::Init(void)
     JointVelParam.SetSize(NB_Actuators);
     JointTargetVel.SetSize(NB_Actuators);
     JointTargetVel.SetAll(0.0);
+    JointEffort.SetSize(NB_Actuators);
+    JointEffort.SetAll(0.0);
+    JointTargetEffort.SetSize(NB_Actuators);
+    JointTargetEffort.SetAll(0.0);
+
+    JointState.Name().SetSize(NB_Actuators);
+    JointState.Name()[0] = "shoulder_pan_joint";
+    JointState.Name()[1] = "shoulder_lift_joint";
+    JointState.Name()[2] = "elbow_joint";
+    JointState.Name()[3] = "wrist_1_joint";
+    JointState.Name()[4] = "wrist_2_joint";
+    JointState.Name()[5] = "wrist_3_joint";
+    JointState.Position().ForceAssign(JointPos);
+    JointState.Velocity().ForceAssign(JointVel);
+    JointState.Effort().ForceAssign(JointEffort);
     TCPSpeed.SetAll(0.0);
     TCPForce.SetAll(0.0);
     debug.SetAll(0.0);
@@ -81,45 +175,58 @@ void mtsUniversalRobotScriptRT::Init(void)
     StateTable.AddData(JointVel, "VelocityJoint");
     StateTable.AddData(JointVelParam, "VelocityJointParam");
     StateTable.AddData(JointTargetVel, "VelocityTargetJoint");
+    StateTable.AddData(JointState, "JointState");
     StateTable.AddData(CartPos, "PositionCartesian");
     StateTable.AddData(TCPSpeed, "VelocityCartesian");
     StateTable.AddData(CartVelParam, "VelocityCartesianParam");
     StateTable.AddData(TCPForce, "ForceCartesianForce");
     StateTable.AddData(WrenchGet, "ForceCartesianParam");
     StateTable.AddData(debug, "Debug");
-  
-    mtsInterfaceProvided *provided = AddInterfaceProvided("control");
-    if (provided) {
+
+    mInterface = AddInterfaceProvided("control");
+    if (mInterface) {
+        // for Status, Warning and Error with mtsMessage
+        mInterface->AddMessageEvents();
+
         // Standard interfaces (same as dVRK)
-        provided->AddCommandReadState(this->StateTable, JointPosParam, "GetPositionJoint");
-        provided->AddCommandReadState(this->StateTable, JointTargetPos, "GetPositionJointDesired");
-        provided->AddCommandReadState(this->StateTable, JointVelParam, "GetVelocityJoint");
-        provided->AddCommandReadState(this->StateTable, CartPos, "GetPositionCartesian");
-        provided->AddCommandReadState(this->StateTable, CartVelParam, "GetVelocityCartesian");
-        provided->AddCommandReadState(this->StateTable, WrenchGet, "GetWrenchBody");
-        provided->AddCommandWrite(&mtsUniversalRobotScriptRT::JointVelocityMove, this, "JointVelocityMove");
-        provided->AddCommandWrite(&mtsUniversalRobotScriptRT::JointPositionMove, this, "JointPositionMove");
-        provided->AddCommandWrite(&mtsUniversalRobotScriptRT::CartesianPositionMove,this, "CartesianPositionMove");
-        provided->AddCommandWrite(&mtsUniversalRobotScriptRT::CartesianVelocityMove,this, "CartesianVelocityMove");
+        mInterface->AddCommandReadState(this->StateTable, JointPosParam, "GetPositionJoint");
+        mInterface->AddCommandReadState(this->StateTable, JointTargetPos, "GetPositionJointDesired");
+        mInterface->AddCommandReadState(this->StateTable, JointVelParam, "GetVelocityJoint");
+        mInterface->AddCommandReadState(this->StateTable, JointState, "GetStateJoint");
+        mInterface->AddCommandReadState(this->StateTable, CartPos, "GetPositionCartesian");
+        mInterface->AddCommandReadState(this->StateTable, CartVelParam, "GetVelocityCartesian");
+        mInterface->AddCommandReadState(this->StateTable, WrenchGet, "GetWrenchBody");
+        mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::JointVelocityMove, this, "JointVelocityMove");
+        mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::JointPositionMove, this, "JointPositionMove");
+        mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::CartesianPositionMove,this, "CartesianPositionMove");
+        mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::CartesianVelocityMove,this, "CartesianVelocityMove");
 
         // Following are not yet standardized
-        provided->AddCommandReadState(StateTable, ControllerTime, "GetControllerTime");
-        provided->AddCommandReadState(StateTable, ControllerExecTime, "GetControllerExecTime");
-        provided->AddCommandVoid(&mtsUniversalRobotScriptRT::DisableMotorPower, this, "DisableMotorPower");
-        provided->AddCommandRead(&mtsUniversalRobotScriptRT::GetConnected, this, "GetConnected");
-        provided->AddCommandRead(&mtsUniversalRobotScriptRT::GetAveragePeriod, this, "GetAveragePeriod");
-        provided->AddCommandVoid(&mtsUniversalRobotScriptRT::StopMotion, this, "StopMotion");  
-        provided->AddCommandVoid(&mtsUniversalRobotScriptRT::SetRobotRunningMode, this, "SetRobotRunningMode");
-        provided->AddCommandVoid(&mtsUniversalRobotScriptRT::SetRobotFreeDriveMode, this, "SetRobotFreeDriveMode");
-        provided->AddCommandReadState(StateTable, debug, "GetDebug");
-        provided->AddCommandRead(&mtsUniversalRobotScriptRT::GetVersion, this, "GetVersion");
+        mInterface->AddCommandReadState(StateTable, ControllerTime, "GetControllerTime");
+        mInterface->AddCommandReadState(StateTable, ControllerExecTime, "GetControllerExecTime");
+        mInterface->AddCommandVoid(&mtsUniversalRobotScriptRT::DisableMotorPower, this, "DisableMotorPower");
+        mInterface->AddCommandRead(&mtsUniversalRobotScriptRT::GetConnected, this, "GetConnected");
+        mInterface->AddCommandRead(&mtsUniversalRobotScriptRT::GetAveragePeriod, this, "GetAveragePeriod");
+        mInterface->AddCommandVoid(&mtsUniversalRobotScriptRT::StopMotion, this, "StopMotion");
+        mInterface->AddCommandVoid(&mtsUniversalRobotScriptRT::SetRobotRunningMode, this, "SetRobotRunningMode");
+        mInterface->AddCommandVoid(&mtsUniversalRobotScriptRT::SetRobotFreeDriveMode, this, "SetRobotFreeDriveMode");
+        mInterface->AddCommandReadState(StateTable, debug, "GetDebug");
+        mInterface->AddCommandRead(&mtsUniversalRobotScriptRT::GetVersion, this, "GetVersion");
+//        mInterface->AddCommandRead(&mtsUniversalRobotScriptRT::GetPolyscopeVersion, this, "GetPolyscopeVersion");
 
-        provided->AddEventVoid(SocketError, "SocketError");
-        provided->AddEventVoid(RobotNotReady, "RobotNotReady");
-        provided->AddEventVoid(ReceiveTimeout, "ReceiveTimeout");
+        mInterface->AddEventVoid(SocketErrorEvent, "SocketError");
+        mInterface->AddEventVoid(RobotNotReadyEvent, "RobotNotReady");
+        mInterface->AddEventVoid(ReceiveTimeoutEvent, "ReceiveTimeout");
         vctULong2 arg;
-        provided->AddEventWrite(PacketInvalid, "PacketInvalid", arg);
+        mInterface->AddEventWrite(PacketInvalid, "PacketInvalid", arg);
+
+        // Stats
+        mInterface->AddCommandReadState(StateTable, StateTable.PeriodStats,
+                                        "GetPeriodStatistics");
     }
+
+    for (size_t i = 0; i < VER_MAX; i++)
+        PacketCount[i] = 0;
 }
 
 void mtsUniversalRobotScriptRT::Configure(const std::string &ipAddr)
@@ -136,27 +243,31 @@ void mtsUniversalRobotScriptRT::Configure(const std::string &ipAddr)
             std::cout << "Connected" << std::endl;
             UR_State = UR_IDLE;
         }
-        else
+        else {
             CMN_LOG_CLASS_INIT_ERROR << "Socket not connected" << std::endl;
+        }
     }
+
+//    std::string pver;
+//    GetPolyscopeVersion(pver);
 }
 
 void mtsUniversalRobotScriptRT::Startup(void)
 {
     if (UR_State != UR_NOT_CONNECTED) {
-        char buffer[2048];
         // Flush any existing packets
         while (socket.Receive(buffer, sizeof(buffer)) > 0);
+        mInterface->SendStatus(this->GetName() + ": socket connected " + ipAddress);
+    } else {
+        mInterface->SendError(this->GetName() + ": socket not connected " + ipAddress);
     }
+
+//    std::string pver;
+//    GetPolyscopeVersion(pver);
 }
 
 void mtsUniversalRobotScriptRT::Run(void)
 {
-    // This buffer must be large enough for largest packet size.
-    // According to documentation, port 30003 packets are up to 1060 bytes (Version 3.2)
-    // (On port 30001, have seen packets as large as 1295 bytes).
-    char buffer[2048];
-
     // Turn this on to enable sanity check of time difference.
     //bool timeCheckEnabled = (ControllerTime != 0);
     bool timeCheckEnabled = false;
@@ -166,16 +277,17 @@ void mtsUniversalRobotScriptRT::Run(void)
         // Call any connected components
         RunEvent();
         ProcessQueuedCommands();
-        osaSleep(0.008);
+        Sleep(0.008 * cmn_s);
         return;
     }
 
-    // Receive a packet with timeout. We choose a timeout of 100 msec, which is much
+    // Receive a packet with timeout. We choose a timeout of 500 msec, which is much
     // larger than expected (should get packets every 8 msec). Thus, if we don't get
     // a packet, then we raise the ReceiveTimeout event.
-    buffer[0] = buffer[1] = buffer[2] = buffer[3] = 0;
-    int numBytes = socket.Receive(buffer, sizeof(buffer), 0.1);
+    buffer[buffer_idx+0] = buffer[buffer_idx+1] = buffer[buffer_idx+2] = buffer[buffer_idx+3] = 0;
+    int numBytes = buffer_idx + socket.Receive(buffer+buffer_idx, sizeof(buffer)-buffer_idx, 0.5 * cmn_s);
     if (numBytes < 0) {
+        buffer_idx = 0;
         SocketError();
         socket.Close();
         UR_State = UR_NOT_CONNECTED;
@@ -183,18 +295,19 @@ void mtsUniversalRobotScriptRT::Run(void)
         ProcessQueuedCommands();
         return;
     }
-    if (numBytes == 0) {
+    else if (numBytes == 0) {
+        buffer_idx = 0;
         ReceiveTimeout();
         RunEvent();
         ProcessQueuedCommands();
         return;
     }
 
-    unsigned long packageLength;
+    uint32_t packageLength;
     // Byteswap package length
     char *p = (char *)(&packageLength);
     p[0] = buffer[3]; p[1] = buffer[2]; p[2] = buffer[1]; p[3] = buffer[0];
-    if (packageLength == static_cast<unsigned long>(numBytes)) {
+    if ((packageLength > 0) && (packageLength <= static_cast<uint32_t>(numBytes))) {
         // Byteswap all the doubles in the package
         for (size_t i = 4; i < packageLength-4; i += 8) {
             for (size_t j = 0; j < 4; j++) {
@@ -203,14 +316,29 @@ void mtsUniversalRobotScriptRT::Run(void)
                 buffer[i + 7 - j] = tmp;
             }
         }
-        if (version == VER_UNKNOWN) {
-            for (int i = VER_UNKNOWN+1; i < VER_MAX; i++) {
-                if (packageLength == PacketLength[i]) {
+        // Check against expected versions. Even if we already know which version of firmware
+        // we are communicating with, we keep checking in case we made a mistake. This also
+        // collects useful debug data.
+        int i;
+        for (i = VER_UNKNOWN+1; i < VER_MAX; i++) {
+            if (packageLength == PacketLength[i]) {
+                PacketCount[i]++;
+                if (version == VER_UNKNOWN)
                     version = static_cast<FirmwareVersion>(i);
-                    break;
+                else if (i != version) {
+                    // Could we have auto-detected the wrong version?
+                    if (PacketCount[i] > PacketCount[version]) {
+                        CMN_LOG_CLASS_RUN_WARNING << "Switching from version " << version
+                                                  << " to version " << i << std::endl;
+                        version = static_cast<FirmwareVersion>(i);
+                    }
                 }
+                break;
             }
         }
+        // If we didn't find a match above, increment the VER_UNKNOWN packet counter
+        if (i == VER_MAX)
+            PacketCount[VER_UNKNOWN]++;
         if (version != VER_UNKNOWN) {
             if (packageLength < PacketLength[version]) {
                 debug[2] += 1;
@@ -238,6 +366,12 @@ void mtsUniversalRobotScriptRT::Run(void)
                 JointPosParam.SetPosition(JointPos);
                 JointVel.Assign(base1->qdActual);
                 JointVelParam.SetVelocity(JointVel);
+                JointEffort.Assign(base1->I_Actual);
+                JointTargetEffort.Assign(base1->I_Target);
+
+                JointState.Position().Assign(JointPos);
+                JointState.Velocity().Assign(JointVel);
+                JointState.Effort().Assign(JointEffort);
             }
             module2 *base2 = (version <= VER_18) ? (module2 *)(&((packet_pre_3 *)buffer)->base2)
                                                  : (module2 *)(&((packet_30_31 *)buffer)->base2);
@@ -265,10 +399,23 @@ void mtsUniversalRobotScriptRT::Run(void)
                 vctFrm3 frm(cartRot, position);
                 CartPos.SetPosition(frm);
             }
+            // Finished with packet; now preserve any extra data for next time
+            if (packageLength < static_cast<unsigned long>(numBytes)) {
+                memmove(buffer, buffer+packageLength, numBytes-packageLength);
+                buffer_idx = numBytes-packageLength;
+            }
+            else
+                buffer_idx = 0;
         }
+        else
+            buffer_idx = 0;
     }
     else {
+        buffer_idx = 0;
         PacketInvalid(vctULong2(numBytes, packageLength));
+        mInterface->SendError(this->GetName() + ": invalid package");
+        // purge buffer
+        while (socket.Receive(buffer, sizeof(buffer)) > 0);
     }
 
     // Advance the state table now, so that any connected components can get
@@ -299,13 +446,11 @@ void mtsUniversalRobotScriptRT::Run(void)
         break;
 
     case UR_FREE_DRIVE:
-        if (socket.Send("freedrive_mode()\n") == -1)
-            SocketError();
         break;
 
     case UR_POS_MOVING:
         if (JointVel.Norm() == 0.0)
-            UR_State = UR_IDLE;  
+            UR_State = UR_IDLE;
         break;
 
     case UR_POWERING_ON:
@@ -324,10 +469,52 @@ void mtsUniversalRobotScriptRT::Cleanup(void)
 {
 }
 
+void mtsUniversalRobotScriptRT::SocketError(void)
+{
+    SocketErrorEvent();
+    mInterface->SendError(this->GetName() + ": socket error, IP: " + ipAddress);
+}
+
+void mtsUniversalRobotScriptRT::RobotNotReady(void)
+{
+    RobotNotReadyEvent();
+    mInterface->SendWarning(this->GetName() + ": robot not ready");
+}
+
+void mtsUniversalRobotScriptRT::ReceiveTimeout(void)
+{
+    ReceiveTimeoutEvent();
+    mInterface->SendError(this->GetName() + ": socket timeout");
+}
+
+
+bool mtsUniversalRobotScriptRT::SendAndReceive(osaSocket &socket, std::string cmd, std::string &recv)
+{
+    char buf[100];
+    if (socket.Send(cmd) < 0) return false;
+    osaSleep(0.1);   // wait for reply
+    if (socket.Receive(buf, 100) < 0) return false;
+
+    recv = buf;
+    return true;
+}
+
 void mtsUniversalRobotScriptRT::SetRobotFreeDriveMode(void)
 {
     if (UR_State == UR_IDLE) {
-        UR_State = UR_FREE_DRIVE;
+        int ret;
+        if (version < VER_30_31) {
+            ret = socket.Send("set robotmode freedrive\n");
+        } else {
+            ret = socket.Send("def saw_ur_freedrive():\n\tfreedrive_mode()\nsleep(20)\nend\n");
+        }
+
+        if (ret == -1) {
+            SocketError();
+        } else {
+            UR_State = UR_FREE_DRIVE;
+            mInterface->SendStatus(this->GetName() + ": set freedrive mode");
+        }
     }
     else
         RobotNotReady();   // if not idle, ignore command and raise event
@@ -336,7 +523,19 @@ void mtsUniversalRobotScriptRT::SetRobotFreeDriveMode(void)
 void mtsUniversalRobotScriptRT::SetRobotRunningMode(void)
 {
     if (UR_State == UR_FREE_DRIVE) {
-        UR_State = UR_IDLE;
+        int ret;
+        if (version < VER_30_31) {
+            ret = socket.Send("set robotmode run\n");
+        } else {
+            ret = socket.Send("end_freedrive_mode()\n");
+        }
+
+        if (ret == -1) {
+            SocketError();
+        } else {
+            UR_State = UR_IDLE;
+            mInterface->SendStatus(this->GetName() + ": set running mode");
+        }
     }
     else
         RobotNotReady();   // if not idle, ignore command and raise event
@@ -442,4 +641,38 @@ void mtsUniversalRobotScriptRT::StopMotion(void)
 {
     if (socket.Send("stopj(1.4)\n") == -1)
         SocketError();
+}
+
+
+void mtsUniversalRobotScriptRT::GetPolyscopeVersion(std::string &pver)
+{
+    osaSocket socketDB;    // Dashboard Server
+    if (socketDB.Connect(ipAddress.c_str(), 29999)) {
+        std::cout << "Connected to Dashboard Server" << std::endl;
+    }
+    else {
+        CMN_LOG_CLASS_INIT_ERROR << "Socket not connected to dashboard server" << std::endl;
+    }
+
+    SendAndReceive(socketDB, "PolyscopeVersion\n", pver);
+
+    std::vector<std::string> strings;
+    std::string s;
+    std::istringstream f(pver);
+    while (getline(f, s, '.')) {
+        strings.push_back(s);
+    }
+
+    if (strings.size() != 3) {
+        std::cerr << "invalid version\n";
+    }
+    else {
+        // FIXME: major in string is 3, however atoi returns 0
+        pversion.major = atoi(strings[0].c_str());
+        pversion.minor = atoi(strings[1].c_str());
+        pversion.bugfix = atoi(strings[2].c_str());
+        std::cout << "major = " << strings[0].c_str() << "  minor = " << strings[1] << "  bugfix = " << strings[2] << "\n";
+    }
+
+    socketDB.Close();
 }

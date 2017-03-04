@@ -26,18 +26,25 @@ if (cisst_FOUND_AS_REQUIRED)
   # load cisst configuration
   include (${CISST_USE_FILE})
 
+  # catkin/ROS paths
+  cisst_is_catkin_build (sawUniversalRobot_IS_CATKIN_BUILT)
+  if (sawUniversalRobot_IS_CATKIN_BUILT)
+    set (EXECUTABLE_OUTPUT_PATH "${CATKIN_DEVEL_PREFIX}/bin")
+    set (LIBRARY_OUTPUT_PATH    "${CATKIN_DEVEL_PREFIX}/lib")
+  endif ()
+
   find_package (sawUniversalRobot REQUIRED)
   include_directories (${sawUniversalRobot_INCLUDE_DIR})
   link_directories (${sawUniversalRobot_LIBRARY_DIR})
 
-  add_executable (URconsole main.cpp)
+  add_executable (sawUniversalRobotConsole main.cpp)
 
   # link with the cisst libraries
-  cisst_target_link_libraries (URconsole ${REQUIRED_CISST_LIBRARIES})
+  cisst_target_link_libraries (sawUniversalRobotConsole ${REQUIRED_CISST_LIBRARIES})
 
   # link with sawUniversalRobot library
-  target_link_libraries (URconsole ${sawUniversalRobot_LIBRARIES})
+  target_link_libraries (sawUniversalRobotConsole ${sawUniversalRobot_LIBRARIES})
 
 else (cisst_FOUND_AS_REQUIRED)
-  message ("Information: URconsole will not be compiled, it requires ${REQUIRED_CISST_LIBRARIES}")
+  message ("Information: sawUniversalRobotConsole will not be compiled, it requires ${REQUIRED_CISST_LIBRARIES}")
 endif (cisst_FOUND_AS_REQUIRED)
