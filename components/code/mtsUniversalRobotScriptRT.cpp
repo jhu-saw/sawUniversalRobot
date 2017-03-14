@@ -506,7 +506,7 @@ void mtsUniversalRobotScriptRT::SetRobotFreeDriveMode(void)
         if (version < VER_30_31) {
             ret = socket.Send("set robotmode freedrive\n");
         } else {
-            ret = socket.Send("def saw_ur_freedrive():\n\tfreedrive_mode()\nsleep(20)\nend\n");
+            ret = socket.Send("def saw_ur_freedrive():\n\tfreedrive_mode()\n\tsleep(20)\nend\n");
         }
 
         if (ret == -1) {
@@ -570,7 +570,7 @@ void mtsUniversalRobotScriptRT::JointVelocityMove(const prmVelocityJointSet &jtv
         // String length is about 28 + 6*7 = 70; set it to 100 to be sure
         // speedj(qd, a, t)
         sprintf(VelCmdString,
-                "speedj([%6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf], %6.4lf, 0.0)\n",
+                "speedj([%6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf], %6.4lf, 0.1)\n",
                 jtvel[0], jtvel[1], jtvel[2], jtvel[3], jtvel[4], jtvel[5], 1.4);
         strcpy(VelCmdStop, "speedj([0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 1.4, 0.0)\n");
         VelCmdTimeout = 100;   // Number of cycles for command to remain valid
@@ -607,7 +607,7 @@ void mtsUniversalRobotScriptRT::CartesianVelocityMove(const prmVelocityCartesian
         vct3 velrot = CartVel.GetAngularVelocity();
         // speedl(qd, a, t, aRot)
         sprintf(VelCmdString,
-                "speedl([%6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf], %6.4lf, 0.0)\n",
+                "speedl([%6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf], %6.4lf, 0.1)\n",
                 velxyz.X(), velxyz.Y(), velxyz.Z(), velrot.X(), velrot.Y(), velrot.Z(), 1.4);
         strcpy(VelCmdStop, "speedl([0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 1.4, 0.0)\n");
         VelCmdTimeout = 100;   // Number of cycles for command to remain valid
