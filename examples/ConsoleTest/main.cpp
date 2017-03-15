@@ -261,7 +261,7 @@ int main(int argc, char **argv)
     cmnLogger::AddChannel(std::cout, CMN_LOG_ALLOW_ERRORS_AND_WARNINGS);
 
     if (argc < 2) {
-        std::cerr << "Syntax: URconsole <ip>" << std::endl;
+        std::cerr << "Syntax: sawUniversalRobotConsole <ip>" << std::endl;
         std::cerr << "        <ip>        IP address of Universal Robot" << std::endl;
         return 0;
     }
