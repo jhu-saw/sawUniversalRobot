@@ -204,6 +204,7 @@ void mtsUniversalRobotScriptRT::Init(void)
         // Following are not yet standardized
         mInterface->AddCommandReadState(StateTable, ControllerTime, "GetControllerTime");
         mInterface->AddCommandReadState(StateTable, ControllerExecTime, "GetControllerExecTime");
+        mInterface->AddCommandVoid(&mtsUniversalRobotScriptRT::EnableMotorPower, this, "EnableMotorPower");
         mInterface->AddCommandVoid(&mtsUniversalRobotScriptRT::DisableMotorPower, this, "DisableMotorPower");
         mInterface->AddCommandRead(&mtsUniversalRobotScriptRT::GetConnected, this, "GetConnected");
         mInterface->AddCommandRead(&mtsUniversalRobotScriptRT::GetAveragePeriod, this, "GetAveragePeriod");
@@ -501,7 +502,7 @@ bool mtsUniversalRobotScriptRT::SendAndReceive(osaSocket &socket, std::string cm
 
 void mtsUniversalRobotScriptRT::SetRobotFreeDriveMode(void)
 {
-    if (UR_State == UR_IDLE) {
+    if ((UR_State == UR_IDLE) || (UR_State == UR_FREE_DRIVE)) {
         int ret;
         if (version < VER_30_31) {
             ret = socket.Send("set robotmode freedrive\n");
@@ -541,10 +542,15 @@ void mtsUniversalRobotScriptRT::SetRobotRunningMode(void)
         RobotNotReady();   // if not idle, ignore command and raise event
 }
 
+void mtsUniversalRobotScriptRT::EnableMotorPower(void)
+{
+    // TBD
+}
+
 void mtsUniversalRobotScriptRT::DisableMotorPower(void)
 {
-    if (socket.Send("powerdown()\n") == -1)
-        SocketError();
+    //if (socket.Send("powerdown()\n") == -1)
+    //    SocketError();
 }
 
 void mtsUniversalRobotScriptRT::JointVelocityMove(const prmVelocityJointSet &jtvelSet)

@@ -115,6 +115,8 @@ protected:
 
     // Methods for provided interface
 
+    // Enable motor power
+    void EnableMotorPower(void);
     // Disable motor power
     void DisableMotorPower(void);
 
