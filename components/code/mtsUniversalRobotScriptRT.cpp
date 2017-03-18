@@ -28,12 +28,11 @@ typedef unsigned __int32 uint32_t;
 
 #include <cisstVector/vctRodriguezRotation3.h>
 #include <cisstMultiTask/mtsInterfaceProvided.h>
-#include <cisstOSAbstraction/osaSleep.h>
 #include <sawUniversalRobot/mtsUniversalRobotScriptRT.h>
 
-const double MAX_VELOCITY = 12.0*cmnPI_180;
-const double MIN_VELOCITY = 0.001*cmnPI_180;
-const double MAX_ACCELERATION = 4.0*cmnPI_180;
+const double MAX_VELOCITY = 12.0 * cmnPI_180;
+const double MIN_VELOCITY = 0.001 * cmnPI_180;
+const double MAX_ACCELERATION = 4.0 * cmnPI_180;
 
 // Packet structs for different versions
 #pragma pack(push, 1)     // Eliminate structure padding
@@ -136,6 +135,8 @@ mtsUniversalRobotScriptRT::~mtsUniversalRobotScriptRT()
 void mtsUniversalRobotScriptRT::Init(void)
 {
     UR_State = UR_NOT_CONNECTED;
+    mShouldBeConnected = false;
+    mTimeOfLastConnectAttempt = 0.0;
 
     ControllerTime = 0.0;
     ControllerExecTime = 0.0;
@@ -233,19 +234,19 @@ void mtsUniversalRobotScriptRT::Init(void)
 void mtsUniversalRobotScriptRT::Configure(const std::string &ipAddr)
 {
     if (ipAddr.empty())
-        CMN_LOG_CLASS_INIT_ERROR << "Configure method requires IP address" << std::endl;
+        CMN_LOG_CLASS_INIT_ERROR << "Configure: requires IP address" << std::endl;
     else {
         ipAddress = ipAddr;
         currentPort = 30003;
-        CMN_LOG_CLASS_INIT_VERBOSE << "Connecting to ip " << ipAddress
+        CMN_LOG_CLASS_INIT_VERBOSE << "Configure: connecting to ip " << ipAddress
                                    << ", port " << currentPort << std::endl;
-        std::cout << "Connecting to ip " << ipAddress << ", port " << currentPort << " ..." << std::endl;
         if (socket.Connect(ipAddress.c_str(), currentPort)) {
-            std::cout << "Connected" << std::endl;
             UR_State = UR_IDLE;
+            mShouldBeConnected = true;
+            CMN_LOG_CLASS_INIT_VERBOSE << "Configure: connected" << std::endl;
         }
         else {
-            CMN_LOG_CLASS_INIT_ERROR << "Socket not connected" << std::endl;
+            CMN_LOG_CLASS_INIT_ERROR << "Configure: socket not connected" << std::endl;
         }
     }
 
@@ -258,9 +259,9 @@ void mtsUniversalRobotScriptRT::Startup(void)
     if (UR_State != UR_NOT_CONNECTED) {
         // Flush any existing packets
         while (socket.Receive(buffer, sizeof(buffer)) > 0);
-        mInterface->SendStatus(this->GetName() + ": socket connected " + ipAddress);
+        mInterface->SendStatus(this->GetName() + ": socket connected, IP: " + ipAddress);
     } else {
-        mInterface->SendError(this->GetName() + ": socket not connected " + ipAddress);
+        mInterface->SendError(this->GetName() + ": socket not connected, IP: " + ipAddress);
     }
 
 //    std::string pver;
@@ -274,7 +275,18 @@ void mtsUniversalRobotScriptRT::Run(void)
     bool timeCheckEnabled = false;
 
     if (UR_State == UR_NOT_CONNECTED) {
-        // Try to connect here?
+        // Try to connect
+        if (mShouldBeConnected) {
+            if ((StateTable.Tic - mTimeOfLastConnectAttempt) > 30.0 * cmn_s) {
+                if (socket.Connect(ipAddress.c_str(), currentPort)) {
+                    UR_State = UR_IDLE;
+                    mInterface->SendStatus(this->GetName() + ": reconnected, IP: " + ipAddress);
+                } else {
+                    mTimeOfLastConnectAttempt = StateTable.Tic;
+                    mInterface->SendError(this->GetName() + ": failed to reconnect, IP: " + ipAddress);
+                }
+            }
+        }
         // Call any connected components
         RunEvent();
         ProcessQueuedCommands();
@@ -286,7 +298,7 @@ void mtsUniversalRobotScriptRT::Run(void)
     // larger than expected (should get packets every 8 msec). Thus, if we don't get
     // a packet, then we raise the ReceiveTimeout event.
     buffer[buffer_idx+0] = buffer[buffer_idx+1] = buffer[buffer_idx+2] = buffer[buffer_idx+3] = 0;
-    int numBytes = buffer_idx + socket.Receive(buffer+buffer_idx, sizeof(buffer)-buffer_idx, 0.5 * cmn_s);
+    int numBytes = buffer_idx + socket.Receive(buffer+buffer_idx, sizeof(buffer)-buffer_idx, 1.0 * cmn_s);
     if (numBytes < 0) {
         buffer_idx = 0;
         SocketError();
@@ -299,10 +311,17 @@ void mtsUniversalRobotScriptRT::Run(void)
     else if (numBytes == 0) {
         buffer_idx = 0;
         ReceiveTimeout();
+        if ((StateTable.Tic - mTimeOfLastPacket) > 10.0 * cmn_s) {
+            socket.Close();
+            UR_State = UR_NOT_CONNECTED;
+            mInterface->SendError(this->GetName() + ": no valid packet in past 10s, disconnecting IP: " + ipAddress);
+            mTimeOfLastConnectAttempt = 0.0;
+        }
         RunEvent();
         ProcessQueuedCommands();
         return;
     }
+    mTimeOfLastPacket = StateTable.Tic;
 
     uint32_t packageLength;
     // Byteswap package length
@@ -493,7 +512,7 @@ bool mtsUniversalRobotScriptRT::SendAndReceive(osaSocket &socket, std::string cm
 {
     char buf[100];
     if (socket.Send(cmd) < 0) return false;
-    osaSleep(0.1);   // wait for reply
+    Sleep(0.1);   // wait for reply
     if (socket.Receive(buf, 100) < 0) return false;
 
     recv = buf;

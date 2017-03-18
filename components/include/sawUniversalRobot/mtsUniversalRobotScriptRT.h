@@ -165,6 +165,14 @@ protected:
     unsigned short currentPort;
     // Socket to UR controller
     osaSocket socket;
+    // Flag used to indicate that robot used to be connected and needs to reconnect
+    bool mShouldBeConnected;
+
+    // Time since last
+    double mTimeOfLastPacket;
+
+    // Time between reconnection attempts
+    double mTimeOfLastConnectAttempt;
 
     // Event generators
     mtsFunctionVoid SocketErrorEvent;
