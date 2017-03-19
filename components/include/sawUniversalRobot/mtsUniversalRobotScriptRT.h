@@ -39,12 +39,7 @@ class CISST_EXPORT mtsUniversalRobotScriptRT : public mtsTaskContinuous
 {
     CMN_DECLARE_SERVICES(CMN_DYNAMIC_CREATION_ONEARG, CMN_LOG_ALLOW_VERBOSE)
 
-protected:
-
-    enum {NB_Actuators = 6};
-
-    enum UR_STATES { UR_NOT_CONNECTED, UR_IDLE, UR_POS_MOVING, UR_VEL_MOVING, UR_FREE_DRIVE, UR_POWERING_OFF, UR_POWERING_ON };
-    UR_STATES UR_State;
+public:
 
     enum RobotModes { ROBOT_MODE_DISCONNECTED, ROBOT_MODE_CONFIRM_SAFETY, ROBOT_MODE_BOOTING,
                       ROBOT_MODE_POWER_OFF, ROBOT_MODE_POWER_ON, ROBOT_MODE_IDLE,
@@ -52,11 +47,25 @@ protected:
 
     enum ControlModes { CONTROL_MODE_POSITION, CONTROL_MODE_TEACH, CONTROL_MODE_FORCE, CONTROL_MODE_TORQUE };
 
+    // JointModes available starting with firmware version 1.8. Note that these are not exactly
+    // the same as in the C API.
     enum JointModes { JOINT_SHUTTING_DOWN_MODE=236, JOINT_PART_D_CALIBRATION_MODE,
                       JOINT_BACKDRIVE_MODE, JOINT_POWER_OFF_MODE, JOINT_NOT_RESPONDING_MODE,
                       JOINT_MOTOR_INITIALISATION_MODE, JOINT_BOOTING_MODE,
                       JOINT_PART_D_CALIBRATION_ERROR_MODE, JOINT_BOOTLOADER_MODE,
                       JOINT_CALIBRATION_MODE, JOINT_FAULT_MODE, JOINT_RUNNING_MODE, JOINT_IDLE_MODE };
+
+    // SafetyMode is available starting with firmware version 3.0. Since the value of 0 is not used by
+    // Universal Robots, we define it to be SAFETY_MODE_UNKNOWN.
+    enum SafetyModes { SAFETY_MODE_UNKNOWN, SAFETY_MODE_NORMAL, SAFETY_MODE_REDUCED, SAFETY_MODE_PROTECTIVE_STOP,
+                       SAFETY_MODE_RECOVERY, SAFETY_MODE_SAFEGUARD_STOP, SAFETY_MODE_SYSTEM_EMERGENCY_STOP,
+                       SAFETY_MODE_ROBOT_EMERGENCY_STOP, SAFETY_MODE_VIOLATION, SAFETY_MODE_FAULT };
+
+protected:
+    enum {NB_Actuators = 6};
+
+    enum UR_STATES { UR_NOT_CONNECTED, UR_IDLE, UR_POS_MOVING, UR_VEL_MOVING, UR_FREE_DRIVE, UR_POWERING_OFF, UR_POWERING_ON };
+    UR_STATES UR_State;
 
     // This buffer must be large enough for largest packet size.
     // According to documentation, port 30003 packets are up to 1060 bytes (Version 3.2)
@@ -75,6 +84,10 @@ protected:
     // State table entries
     double ControllerTime;
     double ControllerExecTime;
+    unsigned int robotMode;
+    vctUInt6 jointModes;
+    unsigned int safetyMode;
+    bool isPowerOn;
 
     vctDoubleVec JointPos;                // Actual joint position
     prmPositionJointGet JointPosParam;    // Actual joint position (standard payload)

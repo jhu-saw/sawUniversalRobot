@@ -140,6 +140,10 @@ void mtsUniversalRobotScriptRT::Init(void)
 
     ControllerTime = 0.0;
     ControllerExecTime = 0.0;
+    robotMode = ROBOT_MODE_DISCONNECTED;
+    jointModes.SetAll(0);  // Not a valid joint mode
+    safetyMode = SAFETY_MODE_UNKNOWN;
+    isPowerOn = false;
     JointPos.SetSize(NB_Actuators);
     JointPos.SetAll(0.0);
     JointPosParam.SetSize(NB_Actuators);
@@ -170,6 +174,10 @@ void mtsUniversalRobotScriptRT::Init(void)
     debug.SetAll(0.0);
     StateTable.AddData(ControllerTime, "ControllerTime");
     StateTable.AddData(ControllerExecTime, "ControllerExecTime");
+    StateTable.AddData(robotMode, "RobotMode");
+    StateTable.AddData(jointModes, "JointModes");
+    StateTable.AddData(safetyMode, "SafetyMode");
+    StateTable.AddData(isPowerOn, "IsPowerOn");
     StateTable.AddData(JointPos, "PositionJoint");
     StateTable.AddData(JointPosParam, "PositionJointParam");
     StateTable.AddData(JointTargetPos, "PositionTargetJoint");
@@ -205,6 +213,10 @@ void mtsUniversalRobotScriptRT::Init(void)
         // Following are not yet standardized
         mInterface->AddCommandReadState(StateTable, ControllerTime, "GetControllerTime");
         mInterface->AddCommandReadState(StateTable, ControllerExecTime, "GetControllerExecTime");
+        mInterface->AddCommandReadState(StateTable, robotMode, "GetRobotMode");
+        mInterface->AddCommandReadState(StateTable, jointModes, "GetJointModes");
+        mInterface->AddCommandReadState(StateTable, safetyMode, "GetSafetyMode");
+        mInterface->AddCommandReadState(StateTable, isPowerOn, "IsMotorPowerOn");
         mInterface->AddCommandVoid(&mtsUniversalRobotScriptRT::EnableMotorPower, this, "EnableMotorPower");
         mInterface->AddCommandVoid(&mtsUniversalRobotScriptRT::DisableMotorPower, this, "DisableMotorPower");
         mInterface->AddCommandRead(&mtsUniversalRobotScriptRT::GetConnected, this, "GetConnected");
@@ -290,11 +302,11 @@ void mtsUniversalRobotScriptRT::Run(void)
         // Call any connected components
         RunEvent();
         ProcessQueuedCommands();
-        Sleep(0.008 * cmn_s);
+        this->Sleep(0.008 * cmn_s);
         return;
     }
 
-    // Receive a packet with timeout. We choose a timeout of 500 msec, which is much
+    // Receive a packet with timeout. We choose a timeout of 1 sec, which is much
     // larger than expected (should get packets every 8 msec). Thus, if we don't get
     // a packet, then we raise the ReceiveTimeout event.
     buffer[buffer_idx+0] = buffer[buffer_idx+1] = buffer[buffer_idx+2] = buffer[buffer_idx+3] = 0;
@@ -400,16 +412,26 @@ void mtsUniversalRobotScriptRT::Run(void)
             ControllerExecTime = base2->controller_Time;
             debug[1] = ControllerExecTime;
 
+            robotMode = static_cast<unsigned int>(base2->robot_Mode);
+            for (i = 0; i < NB_Actuators; i++)
+                jointModes[i] = static_cast<unsigned int>(base2->joint_Modes[i]);
+
+            // Power is on if we are in ROBOT_MODE_POWER_ON, ROBOT_MODE_IDLE, ROBOT_MODE_BACKDRIVE,
+            // or ROBOT_MODE_RUNNING states
+            isPowerOn = (robotMode >= ROBOT_MODE_POWER_ON) && (robotMode <= ROBOT_MODE_RUNNING);
+
             double *tool_vec = 0;
             if (version < VER_30_31) {
                 packet_pre_3 *packet = (packet_pre_3 *)(buffer);
                 // Documentation does not specify whether tool_Vector field is
                 // the actual or target Cartesian position.
                 tool_vec = packet->tool_Vector;
+                safetyMode = SAFETY_MODE_UNKNOWN;
             }
             else if (version >= VER_30_31) {
                 packet_30_31 *packet = (packet_30_31 *)(buffer);
                 tool_vec = packet->tool_vec_Act;  // actual Cartesian position
+                safetyMode = static_cast<unsigned int>(packet->safety_Mode);
             }
             if (tool_vec) {
                 vct3 position(tool_vec);
@@ -512,7 +534,7 @@ bool mtsUniversalRobotScriptRT::SendAndReceive(osaSocket &socket, std::string cm
 {
     char buf[100];
     if (socket.Send(cmd) < 0) return false;
-    Sleep(0.1);   // wait for reply
+    this->Sleep(0.1);   // wait for reply
     if (socket.Receive(buf, 100) < 0) return false;
 
     recv = buf;

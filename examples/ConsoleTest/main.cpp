@@ -48,9 +48,14 @@ private:
     mtsFunctionWrite VelocityMoveJoint;
     mtsFunctionWrite VelocityMoveCartesian;
     mtsFunctionRead GetDebug;
+    mtsFunctionRead GetRobotMode;
+    mtsFunctionRead GetJointModes;
+    mtsFunctionRead GetSafetyMode;
+    mtsFunctionRead IsMotorPowerOn;
     mtsFunctionVoid SetRobotFreeDriveMode;
     mtsFunctionVoid SetRobotRunningMode;
     mtsFunctionVoid StopMotion;
+    mtsFunctionVoid EnableMotorPower;
     mtsFunctionVoid DisableMotorPower;
 
     bool debugMode;
@@ -89,9 +94,14 @@ public:
             req->AddFunction("CartesianVelocityMove", VelocityMoveCartesian);
             req->AddFunction("GetDebug", GetDebug);
             req->AddFunction("GetVersion", GetVersion);
+            req->AddFunction("GetRobotMode", GetRobotMode);
+            req->AddFunction("GetJointModes", GetJointModes);
+            req->AddFunction("GetSafetyMode", GetSafetyMode);
+            req->AddFunction("IsMotorPowerOn", IsMotorPowerOn);
             req->AddFunction("SetRobotFreeDriveMode", SetRobotFreeDriveMode);
             req->AddFunction("SetRobotRunningMode", SetRobotRunningMode);
             req->AddFunction("StopMotion", StopMotion);
+            req->AddFunction("EnableMotorPower", EnableMotorPower);
             req->AddFunction("DisableMotorPower", DisableMotorPower);
             req->AddEventHandlerVoid(&UniversalRobotClient::OnSocketError,
                                      this, "SocketError");
@@ -106,20 +116,28 @@ public:
 
     void Configure(const std::string&) {}
 
+    void PrintHelp()
+    {
+        std::cout << "Available commands:" << std::endl
+                  << "  h: display help information" << std::endl
+                  << "  m: position move joints" << std::endl
+                  << "  M: position move cartesian" << std::endl
+                  << "  v: velocity move joints" << std::endl
+                  << "  V: velocity move cartesian" << std::endl
+                  << "  d: toggle debug data display" << std::endl
+                  << "  s: stop motion" << std::endl
+                  << "  x: get version" << std::endl
+                  << "  f: free drive mode" << std::endl
+                  << "  r: running mode" << std::endl
+                  << "  i: display robot info (e.g., times, modes)" << std::endl
+                  << "  e: disable motor power" << std::endl
+                  << "  n: disable motor power" << std::endl
+                  << "  q: quit" << std::endl;
+    }
+
     void Startup()
     {
-        std::cout << "m: position move joints" << std::endl
-            << "M: position move cartesian" << std::endl
-            << "v: velocity move joints" << std::endl
-            << "V: velocity move cartesian" << std::endl
-            << "d: toggle debug data display" << std::endl
-            << "s: stop motion" << std::endl
-            << "x: get version" << std::endl
-            << "f: free drive mode" << std::endl
-            << "r: running mode" << std::endl
-            << "q: quit" << std::endl
-            << "n: shut down robot" << std::endl
-            << "Select Option: " << std::endl;
+        PrintHelp();
     }
 
     void Run() {
@@ -131,6 +149,10 @@ public:
         vctDoubleRot3 cartRot;
         vct6 debug;
         int version;
+        int robotMode;
+        vctUInt6 jointModes;
+        int safetyMode;
+        bool flag;
         const char *versionString[] = { "Unknown", "Pre-1.8", "1.8", "3.0/3.1", "3.2" };
 
         ProcessQueuedEvents();
@@ -147,6 +169,11 @@ public:
             if (cmnKbHit()) {
                 char c = cmnGetChar();
                 switch (c) {
+
+                case 'h':
+                    std::cout << std::endl;
+                    PrintHelp();
+                    break;
 
                 case 'm':   // position move joint
                     std::cout << std::endl << "Enter joint positions (deg): ";
@@ -193,11 +220,6 @@ public:
                     VelocityMoveCartesian(cartVelSet);
                     break;
 
-                case 'q':   // quit program
-                    std::cout << "Exiting.. " << std::endl;
-                    this->Kill();
-                    break;
-
                 case 'd':  // display debug data
                     debugMode = !debugMode;
                     break;
@@ -222,9 +244,36 @@ public:
                     SetRobotRunningMode();
                     break;
 
-                case 'n':   // shut down robot
+                case 'i':   // robot info
+                    GetRobotMode(robotMode);
+                    GetJointModes(jointModes);
+                    GetSafetyMode(safetyMode);
+                    IsMotorPowerOn(flag);
+                    std::cout << std::endl
+                              << "Controller Time: " << cTime << std::endl
+                              << "Controller Execution Time: " << cExecTime << std::endl
+                              << "Robot Mode: " << robotMode << std::endl
+                              << "Safety Mode: " << safetyMode << std::endl
+                              << "Joint Modes: " << jointModes << std::endl;
+                    if (flag)
+                        std::cout << "Motor power is on" << std::endl;
+                    else
+                        std::cout << "Motor power is off" << std::endl;
+                    break;
+
+                case 'e':   // enable motor power
+                    EnableMotorPower();
+                    break;
+
+                case 'n':   // disable motor power
                     DisableMotorPower();
                     break;
+
+                case 'q':   // quit program
+                    std::cout << "Exiting.. " << std::endl;
+                    this->Kill();
+                    break;
+
                 }
             }
 
@@ -233,16 +282,9 @@ public:
             if (debugMode)
                printf("DEBUG: [%6.1lf,%6.1lf,%6.1lf,%6.1lf,%6.1lf,%6.1lf]                           \r",
                       debug[0], debug[1], debug[2], debug[3], debug[4], debug[5]);
-#if 1
             else
                printf("JOINTS (deg): [%5.2lf,%5.2lf,%5.2lf,%5.2lf,%5.2lf,%5.2lf], PERIOD (s): %6.4lf\r",
                       jtposDeg[0], jtposDeg[1], jtposDeg[2], jtposDeg[3], jtposDeg[4], jtposDeg[5], period);
-#else
-            else
-                printf("TIME (s): %6.1lf, JOINTS (deg): [%5.2lf,%5.2lf,%5.2lf,%5.2lf,%5.2lf,%5.2lf]\r",
-                       cTime, jtposDeg[0], jtposDeg[1], jtposDeg[2], jtposDeg[3], jtposDeg[4], jtposDeg[5]);
-#endif
-
         }
         osaSleep(0.01);  // to avoid taking too much CPU time
     }
