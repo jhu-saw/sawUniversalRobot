@@ -41,25 +41,44 @@ class CISST_EXPORT mtsUniversalRobotScriptRT : public mtsTaskContinuous
 
 public:
 
+    // RobotModes, defined in Client_Interface.xlsx. These do not seem to correspond to any
+    // definitions in the C API for Version 1.8 -- the closest definitions are in robotinterface.h.
     enum RobotModes { ROBOT_MODE_DISCONNECTED, ROBOT_MODE_CONFIRM_SAFETY, ROBOT_MODE_BOOTING,
                       ROBOT_MODE_POWER_OFF, ROBOT_MODE_POWER_ON, ROBOT_MODE_IDLE,
                       ROBOT_MODE_BACKDRIVE, ROBOT_MODE_RUNNING, ROBOT_MODE_UPDATING_FIRMWARE };
 
-    enum ControlModes { CONTROL_MODE_POSITION, CONTROL_MODE_TEACH, CONTROL_MODE_FORCE, CONTROL_MODE_TORQUE };
-
-    // JointModes available starting with firmware version 1.8. Note that these are not exactly
-    // the same as in the C API.
-    enum JointModes { JOINT_SHUTTING_DOWN_MODE=236, JOINT_PART_D_CALIBRATION_MODE,
-                      JOINT_BACKDRIVE_MODE, JOINT_POWER_OFF_MODE, JOINT_NOT_RESPONDING_MODE,
-                      JOINT_MOTOR_INITIALISATION_MODE, JOINT_BOOTING_MODE,
-                      JOINT_PART_D_CALIBRATION_ERROR_MODE, JOINT_BOOTLOADER_MODE,
-                      JOINT_CALIBRATION_MODE, JOINT_FAULT_MODE, JOINT_RUNNING_MODE, JOINT_IDLE_MODE };
+    // JointModes available starting with firmware version 1.8. Some of these definitions are not
+    // documented in the script interface (Client_Interface.xlsx), but were instead obtained from
+    // the C API (microprocessor_commands.h) for Version 1.8.
+    enum JointModes { JOINT_SHUTTING_DOWN_MODE = 236,          // Not in C API
+                      JOINT_PART_D_CALIBRATION_MODE = 237,
+                      JOINT_BACKDRIVE_MODE = 238,
+                      JOINT_POWER_OFF_MODE = 239,
+                      JOINT_EMERGENCY_STOPPED_MODE = 240,      // C API
+                      JOINT_CALVAL_INITIALIZATION_MODE = 241,  // C API
+                      JOINT_ERROR_MODE = 242,                  // C API
+                      JOINT_FREEDRIVE_MODE = 243,              // C API
+                      JOINT_SIMULATED_MODE = 244,              // C API
+                      JOINT_NOT_RESPONDING_MODE = 245,
+                      JOINT_MOTOR_INITIALISATION_MODE = 246,
+                      JOINT_BOOTING_MODE = 247,
+                      JOINT_PART_D_CALIBRATION_ERROR_MODE = 248,
+                      JOINT_BOOTLOADER_MODE = 249,
+                      JOINT_CALIBRATION_MODE = 250,
+                      JOINT_SECURITY_STOPPED_MODE = 251,
+                      JOINT_FAULT_MODE = 252,
+                      JOINT_RUNNING_MODE = 253,
+                      JOINT_INITIALISATION_MODE = 254,         // C API
+                      JOINT_IDLE_MODE = 255 };
 
     // SafetyMode is available starting with firmware version 3.0. Since the value of 0 is not used by
     // Universal Robots, we define it to be SAFETY_MODE_UNKNOWN.
-    enum SafetyModes { SAFETY_MODE_UNKNOWN, SAFETY_MODE_NORMAL, SAFETY_MODE_REDUCED, SAFETY_MODE_PROTECTIVE_STOP,
-                       SAFETY_MODE_RECOVERY, SAFETY_MODE_SAFEGUARD_STOP, SAFETY_MODE_SYSTEM_EMERGENCY_STOP,
-                       SAFETY_MODE_ROBOT_EMERGENCY_STOP, SAFETY_MODE_VIOLATION, SAFETY_MODE_FAULT };
+    enum SafetyModes { SAFETY_MODE_UNKNOWN, SAFETY_MODE_NORMAL, SAFETY_MODE_REDUCED,
+                       SAFETY_MODE_PROTECTIVE_STOP, SAFETY_MODE_RECOVERY,
+                       SAFETY_MODE_SAFEGUARD_STOP,          // Physical s-stop interface input
+                       SAFETY_MODE_SYSTEM_EMERGENCY_STOP,   // Physical e-stop interface input
+                       SAFETY_MODE_ROBOT_EMERGENCY_STOP,    // Physical e-stop interface input
+                       SAFETY_MODE_VIOLATION, SAFETY_MODE_FAULT };
 
 protected:
     enum {NB_Actuators = 6};

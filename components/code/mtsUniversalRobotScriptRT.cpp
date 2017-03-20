@@ -112,7 +112,7 @@ unsigned long mtsUniversalRobotScriptRT::PacketLength[VER_MAX] = {
      764,  // VER_PRE_18
      812,  // VER_18
     1044,  // VER_30_31
-    1060   // VER_32
+    1060   // VER_32 (up to at least Version 3.4)
 };
 
 mtsUniversalRobotScriptRT::mtsUniversalRobotScriptRT(const std::string &name, unsigned int sizeStateTable, bool newThread) :
@@ -412,9 +412,9 @@ void mtsUniversalRobotScriptRT::Run(void)
             ControllerExecTime = base2->controller_Time;
             debug[1] = ControllerExecTime;
 
-            robotMode = static_cast<unsigned int>(base2->robot_Mode);
+            robotMode = static_cast<unsigned int>(base2->robot_Mode+0.5);
             for (i = 0; i < NB_Actuators; i++)
-                jointModes[i] = static_cast<unsigned int>(base2->joint_Modes[i]);
+                jointModes[i] = static_cast<unsigned int>(base2->joint_Modes[i]+0.5);
 
             // Power is on if we are in ROBOT_MODE_POWER_ON, ROBOT_MODE_IDLE, ROBOT_MODE_BACKDRIVE,
             // or ROBOT_MODE_RUNNING states
@@ -431,7 +431,7 @@ void mtsUniversalRobotScriptRT::Run(void)
             else if (version >= VER_30_31) {
                 packet_30_31 *packet = (packet_30_31 *)(buffer);
                 tool_vec = packet->tool_vec_Act;  // actual Cartesian position
-                safetyMode = static_cast<unsigned int>(packet->safety_Mode);
+                safetyMode = static_cast<unsigned int>(packet->safety_Mode+0.5);
             }
             if (tool_vec) {
                 vct3 position(tool_vec);
