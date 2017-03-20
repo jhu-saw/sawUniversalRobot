@@ -138,7 +138,7 @@ std::string mtsUniversalRobotScriptRT::JointModeName(unsigned int mode)
                             "SECURITY_STOPPED", "FAULT", "RUNNING", "INITIALISATION", "IDLE" };
 
     std::string str;
-    if ((mode >= JOINT_SHUTTING_DOWN_MODE) || (mode <= JOINT_IDLE_MODE))
+    if ((mode >= JOINT_SHUTTING_DOWN_MODE) && (mode <= JOINT_IDLE_MODE))
         str.assign(names[mode-JOINT_SHUTTING_DOWN_MODE]);
     else
         str.assign("INVALID");
