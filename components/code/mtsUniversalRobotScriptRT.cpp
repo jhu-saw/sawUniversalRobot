@@ -189,6 +189,7 @@ void mtsUniversalRobotScriptRT::Init(void)
     jointModes.SetAll(0);  // Not a valid joint mode
     safetyMode = SAFETY_MODE_UNKNOWN;
     isPowerOn = false;
+    isEStop = false;
     JointPos.SetSize(NB_Actuators);
     JointPos.SetAll(0.0);
     JointPosParam.SetSize(NB_Actuators);
@@ -223,6 +224,7 @@ void mtsUniversalRobotScriptRT::Init(void)
     StateTable.AddData(jointModes, "JointModes");
     StateTable.AddData(safetyMode, "SafetyMode");
     StateTable.AddData(isPowerOn, "IsPowerOn");
+    StateTable.AddData(isEStop, "IsEStop");
     StateTable.AddData(JointPos, "PositionJoint");
     StateTable.AddData(JointPosParam, "PositionJointParam");
     StateTable.AddData(JointTargetPos, "PositionTargetJoint");
@@ -262,6 +264,7 @@ void mtsUniversalRobotScriptRT::Init(void)
         mInterface->AddCommandReadState(StateTable, jointModes, "GetJointModes");
         mInterface->AddCommandReadState(StateTable, safetyMode, "GetSafetyMode");
         mInterface->AddCommandReadState(StateTable, isPowerOn, "IsMotorPowerOn");
+        mInterface->AddCommandReadState(StateTable, isEStop, "IsEStop");
         mInterface->AddCommandVoid(&mtsUniversalRobotScriptRT::EnableMotorPower, this, "EnableMotorPower");
         mInterface->AddCommandVoid(&mtsUniversalRobotScriptRT::DisableMotorPower, this, "DisableMotorPower");
         mInterface->AddCommandRead(&mtsUniversalRobotScriptRT::GetConnected, this, "GetConnected");
@@ -461,11 +464,17 @@ void mtsUniversalRobotScriptRT::Run(void)
             for (i = 0; i < NB_Actuators; i++)
                 jointModes[i] = static_cast<unsigned int>(base2->joint_Modes[i]+0.5);
 
-            // Power is on if we are in ROBOT_MODE_POWER_ON, ROBOT_MODE_BACKDRIVE,
-            // or ROBOT_MODE_RUNNING states
-            isPowerOn = (robotMode == ROBOT_MODE_POWER_ON) ||
-                        (robotMode == ROBOT_MODE_BACKDRIVE) ||
-                        (robotMode == ROBOT_MODE_RUNNING);
+            // We use the jointModes rather than robotMode to determine whether power is on because
+            // the robotMode seems unreliable for some firmware versions, such as Version 1.8.
+            // If using robotMode, could assume that power is on if we are in ROBOT_MODE_POWER_ON,
+            // ROBOT_MODE_BACKDRIVE, or ROBOT_MODE_RUNNING states.
+            // For jointModes, power is on if we are RUNNING, FREEDRIVE, and INITIALISATION.
+            isPowerOn = (jointModes.Equal(JOINT_RUNNING_MODE)) ||
+                        (jointModes.Equal(JOINT_FREEDRIVE_MODE)) ||
+                        (jointModes.Equal(JOINT_INITIALISATION_MODE));
+
+            // Whether e-stop is pressed
+            isEStop = jointModes.Equal(JOINT_EMERGENCY_STOPPED_MODE);
 
             double *tool_vec = 0;
             if (version < VER_30_31) {
@@ -532,13 +541,18 @@ void mtsUniversalRobotScriptRT::Run(void)
             if (socket.Send(VelCmdString) == -1)
                  SocketError();
         }
+        if (!isPowerOn)
+            UR_State = UR_IDLE;
         break;
 
     case UR_FREE_DRIVE:
+        if (!isPowerOn)
+            UR_State = UR_IDLE;
         break;
 
     case UR_POS_MOVING:
-        if (JointVel.Norm() == 0.0)
+        // Need a better check for end of motion
+        if ((JointVel.Norm() == 0.0) || (!isPowerOn))
             UR_State = UR_IDLE;
         break;
 
@@ -550,6 +564,8 @@ void mtsUniversalRobotScriptRT::Run(void)
                 SocketError();
             UR_State = UR_IDLE;
         }
+        else if (isEStop)
+            UR_State = UR_IDLE;
         break;
 
     case UR_POWERING_OFF:
@@ -633,8 +649,8 @@ void mtsUniversalRobotScriptRT::SetRobotRunningMode(void)
             mInterface->SendStatus(this->GetName() + ": set running mode");
         }
     }
-    else
-        RobotNotReady();   // if not idle, ignore command and raise event
+    else if (UR_State != UR_IDLE)
+        RobotNotReady();
 }
 
 void mtsUniversalRobotScriptRT::EnableMotorPower(void)

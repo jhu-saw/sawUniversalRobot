@@ -52,6 +52,7 @@ private:
     mtsFunctionRead GetJointModes;
     mtsFunctionRead GetSafetyMode;
     mtsFunctionRead IsMotorPowerOn;
+    mtsFunctionRead IsEStop;
     mtsFunctionVoid SetRobotFreeDriveMode;
     mtsFunctionVoid SetRobotRunningMode;
     mtsFunctionVoid StopMotion;
@@ -98,6 +99,7 @@ public:
             req->AddFunction("GetJointModes", GetJointModes, MTS_OPTIONAL);
             req->AddFunction("GetSafetyMode", GetSafetyMode, MTS_OPTIONAL);
             req->AddFunction("IsMotorPowerOn", IsMotorPowerOn);
+            req->AddFunction("IsEStop", IsEStop);
             req->AddFunction("SetRobotFreeDriveMode", SetRobotFreeDriveMode);
             req->AddFunction("SetRobotRunningMode", SetRobotRunningMode);
             req->AddFunction("StopMotion", StopMotion);
@@ -269,6 +271,11 @@ public:
                         std::cout << "Motor power is on" << std::endl;
                     else
                         std::cout << "Motor power is off" << std::endl;
+                    IsEStop(flag);
+                    if (flag)
+                        std::cout << "Emergency stop is pressed" << std::endl;
+                    else
+                        std::cout << "Emergency stop is not pressed" << std::endl;
                     break;
 
                 case 'e':   // enable motor power

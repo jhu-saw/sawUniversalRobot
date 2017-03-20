@@ -113,6 +113,7 @@ protected:
     vctUInt6 jointModes;
     unsigned int safetyMode;
     bool isPowerOn;
+    bool isEStop;
 
     vctDoubleVec JointPos;                // Actual joint position
     prmPositionJointGet JointPosParam;    // Actual joint position (standard payload)
