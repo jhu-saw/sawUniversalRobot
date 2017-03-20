@@ -634,7 +634,6 @@ void mtsUniversalRobotScriptRT::EnableMotorPower(void)
 {
     if (socket.Send("power on\n") == -1)
         SocketError();
-    }
 #if 0  // Following does not seem to work
     if (socket.Send("brake release\n") == -1)
         SocketError();
