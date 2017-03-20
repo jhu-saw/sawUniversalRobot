@@ -740,6 +740,10 @@ void mtsUniversalRobotScriptRT::StopMotion(void)
 {
     if (socket.Send("stopj(1.4)\n") == -1)
         SocketError();
+    else {
+        if ((UR_State == UR_POS_MOVING) || (UR_State == UR_VEL_MOVING) || (UR_State == UR_FREE_DRIVE))
+            UR_State = UR_IDLE;
+    }
 }
 
 
