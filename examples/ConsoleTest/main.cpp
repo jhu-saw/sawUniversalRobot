@@ -94,9 +94,9 @@ public:
             req->AddFunction("CartesianVelocityMove", VelocityMoveCartesian);
             req->AddFunction("GetDebug", GetDebug);
             req->AddFunction("GetVersion", GetVersion);
-            req->AddFunction("GetRobotMode", GetRobotMode);
-            req->AddFunction("GetJointModes", GetJointModes);
-            req->AddFunction("GetSafetyMode", GetSafetyMode);
+            req->AddFunction("GetRobotMode", GetRobotMode, MTS_OPTIONAL);
+            req->AddFunction("GetJointModes", GetJointModes, MTS_OPTIONAL);
+            req->AddFunction("GetSafetyMode", GetSafetyMode, MTS_OPTIONAL);
             req->AddFunction("IsMotorPowerOn", IsMotorPowerOn);
             req->AddFunction("SetRobotFreeDriveMode", SetRobotFreeDriveMode);
             req->AddFunction("SetRobotRunningMode", SetRobotRunningMode);
@@ -149,11 +149,12 @@ public:
         vctDoubleRot3 cartRot;
         vct6 debug;
         int version;
-        int robotMode;
+        unsigned int robotMode;
         vctUInt6 jointModes;
-        int safetyMode;
+        unsigned int safetyMode;
         bool flag;
         const char *versionString[] = { "Unknown", "Pre-1.8", "1.8", "3.0/3.1", "3.2" };
+        size_t i;
 
         ProcessQueuedEvents();
 
@@ -245,16 +246,25 @@ public:
                     break;
 
                 case 'i':   // robot info
-                    GetRobotMode(robotMode);
-                    GetJointModes(jointModes);
-                    GetSafetyMode(safetyMode);
-                    IsMotorPowerOn(flag);
                     std::cout << std::endl
                               << "Controller Time: " << cTime << std::endl
-                              << "Controller Execution Time: " << cExecTime << std::endl
-                              << "Robot Mode: " << robotMode << std::endl
-                              << "Safety Mode: " << safetyMode << std::endl
-                              << "Joint Modes: " << jointModes << std::endl;
+                              << "Controller Execution Time: " << cExecTime << std::endl;
+                    if (GetRobotMode.IsValid()) {
+                        GetRobotMode(robotMode);
+                        std::cout  << "Robot Mode: " << mtsUniversalRobotScriptRT::RobotModeName(robotMode) << std::endl;
+                    }
+                    if (GetSafetyMode.IsValid()) {
+                        GetSafetyMode(safetyMode);
+                        std::cout << "Safety Mode: " << mtsUniversalRobotScriptRT::SafetyModeName(safetyMode) << std::endl;
+                    }
+                    if (GetJointModes.IsValid()) {
+                        GetJointModes(jointModes);
+                        std::cout << "Joint Modes: ";
+                        for (i = 0; i < jointModes.size(); i++)
+                            std::cout << mtsUniversalRobotScriptRT::JointModeName(jointModes[i]) << " ";
+                        std::cout << std::endl;
+                    }
+                    IsMotorPowerOn(flag);
                     if (flag)
                         std::cout << "Motor power is on" << std::endl;
                     else

@@ -47,6 +47,8 @@ public:
                       ROBOT_MODE_POWER_OFF, ROBOT_MODE_POWER_ON, ROBOT_MODE_IDLE,
                       ROBOT_MODE_BACKDRIVE, ROBOT_MODE_RUNNING, ROBOT_MODE_UPDATING_FIRMWARE };
 
+    static std::string RobotModeName(unsigned int mode);
+
     // JointModes available starting with firmware version 1.8. Some of these definitions are not
     // documented in the script interface (Client_Interface.xlsx), but were instead obtained from
     // the C API (microprocessor_commands.h) for Version 1.8.
@@ -71,6 +73,8 @@ public:
                       JOINT_INITIALISATION_MODE = 254,         // C API
                       JOINT_IDLE_MODE = 255 };
 
+    static std::string JointModeName(unsigned int mode);
+
     // SafetyMode is available starting with firmware version 3.0. Since the value of 0 is not used by
     // Universal Robots, we define it to be SAFETY_MODE_UNKNOWN.
     enum SafetyModes { SAFETY_MODE_UNKNOWN, SAFETY_MODE_NORMAL, SAFETY_MODE_REDUCED,
@@ -79,6 +83,8 @@ public:
                        SAFETY_MODE_SYSTEM_EMERGENCY_STOP,   // Physical e-stop interface input
                        SAFETY_MODE_ROBOT_EMERGENCY_STOP,    // Physical e-stop interface input
                        SAFETY_MODE_VIOLATION, SAFETY_MODE_FAULT };
+
+    static std::string SafetyModeName(unsigned int mode);
 
 protected:
     enum {NB_Actuators = 6};

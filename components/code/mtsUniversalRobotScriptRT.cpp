@@ -115,6 +115,51 @@ unsigned long mtsUniversalRobotScriptRT::PacketLength[VER_MAX] = {
     1060   // VER_32 (up to at least Version 3.4)
 };
 
+
+// Static methods
+std::string mtsUniversalRobotScriptRT::RobotModeName(unsigned int mode)
+{
+    const char *names[] = { "DISCONNECTED", "CONFIRM_SAFETY", "BOOTING", "POWER_OFF", "POWER_ON",
+                            "IDLE", "BACKDRIVE", "RUNNING", "UPDATING_FIRMWARE" };
+    std::string str;
+    if (mode <= ROBOT_MODE_UPDATING_FIRMWARE)
+        str.assign(names[mode]);
+    else
+        str.assign("INVALID");
+    return str;
+}
+
+std::string mtsUniversalRobotScriptRT::JointModeName(unsigned int mode)
+{
+    const char *names[] = { "SHUTTING_DOWN", "PART_D_CALIBRATION", "BACKDRIVE", "POWER_OFF",
+                            "EMERGENCY_STOPPED", "CALVAL_INITIALIZATION", "ERROR",
+                            "FREEDRIVE", "SIMULATED", "NOT_RESPONDING", "MOTOR_INITIALISATION",
+                            "BOOTING", "PART_D_CALIBRATION_ERROR", "BOOTLOADER", "CALIBRATION",
+                            "SECURITY_STOPPED", "FAULT", "RUNNING", "INITIALISATION", "IDLE" };
+
+    std::string str;
+    if ((mode >= JOINT_SHUTTING_DOWN_MODE) || (mode <= JOINT_IDLE_MODE))
+        str.assign(names[mode-JOINT_SHUTTING_DOWN_MODE]);
+    else
+        str.assign("INVALID");
+    return str;
+}
+
+std::string mtsUniversalRobotScriptRT::SafetyModeName(unsigned int mode)
+{
+    const char *names[] = { "UNKNOWN", "NORMAL", "REDUCED", "PROTECTIVE_STOP", "RECOVERY",
+                            "SAFEGUARD_STOP", "SYSTEM_EMERGENCY_STOP", "ROBOT_EMERGENCY_STOP",
+                            "VIOLATION", "FAULT" };
+
+    std::string str;
+    if (mode <= SAFETY_MODE_FAULT)
+        str.assign(names[mode]);
+    else
+        str.assign("INVALID");
+    return str;
+}
+
+// Constructor
 mtsUniversalRobotScriptRT::mtsUniversalRobotScriptRT(const std::string &name, unsigned int sizeStateTable, bool newThread) :
     mtsTaskContinuous(name, sizeStateTable, newThread), buffer_idx(0), version(VER_UNKNOWN)
 {
@@ -416,9 +461,11 @@ void mtsUniversalRobotScriptRT::Run(void)
             for (i = 0; i < NB_Actuators; i++)
                 jointModes[i] = static_cast<unsigned int>(base2->joint_Modes[i]+0.5);
 
-            // Power is on if we are in ROBOT_MODE_POWER_ON, ROBOT_MODE_IDLE, ROBOT_MODE_BACKDRIVE,
+            // Power is on if we are in ROBOT_MODE_POWER_ON, ROBOT_MODE_BACKDRIVE,
             // or ROBOT_MODE_RUNNING states
-            isPowerOn = (robotMode >= ROBOT_MODE_POWER_ON) && (robotMode <= ROBOT_MODE_RUNNING);
+            isPowerOn = (robotMode == ROBOT_MODE_POWER_ON) ||
+                        (robotMode == ROBOT_MODE_BACKDRIVE) ||
+                        (robotMode == ROBOT_MODE_RUNNING);
 
             double *tool_vec = 0;
             if (version < VER_30_31) {
@@ -585,13 +632,19 @@ void mtsUniversalRobotScriptRT::SetRobotRunningMode(void)
 
 void mtsUniversalRobotScriptRT::EnableMotorPower(void)
 {
-    // TBD
+    if (socket.Send("power on\n") == -1)
+        SocketError();
+    }
+#if 0  // Following does not seem to work
+    if (socket.Send("brake release\n") == -1)
+        SocketError();
+#endif
 }
 
 void mtsUniversalRobotScriptRT::DisableMotorPower(void)
 {
-    //if (socket.Send("powerdown()\n") == -1)
-    //    SocketError();
+    if (socket.Send("power off\n") == -1)
+        SocketError();
 }
 
 void mtsUniversalRobotScriptRT::JointVelocityMove(const prmVelocityJointSet &jtvelSet)
