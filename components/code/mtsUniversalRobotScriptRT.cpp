@@ -543,6 +543,13 @@ void mtsUniversalRobotScriptRT::Run(void)
         break;
 
     case UR_POWERING_ON:
+        if (jointModes.Equal(JOINT_IDLE_MODE)) {
+            // Seems to be necessary to send another "power on" command
+            // before sending "brake release".
+            if (socket.Send("power on\nbrake release\n") == -1)
+                SocketError();
+            UR_State = UR_IDLE;
+        }
         break;
 
     case UR_POWERING_OFF:
@@ -634,10 +641,7 @@ void mtsUniversalRobotScriptRT::EnableMotorPower(void)
 {
     if (socket.Send("power on\n") == -1)
         SocketError();
-#if 0  // Following does not seem to work
-    if (socket.Send("brake release\n") == -1)
-        SocketError();
-#endif
+    UR_State = UR_POWERING_ON;
 }
 
 void mtsUniversalRobotScriptRT::DisableMotorPower(void)
