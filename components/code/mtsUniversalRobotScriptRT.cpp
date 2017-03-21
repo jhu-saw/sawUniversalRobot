@@ -119,11 +119,11 @@ unsigned long mtsUniversalRobotScriptRT::PacketLength[VER_MAX] = {
 // Static methods
 std::string mtsUniversalRobotScriptRT::RobotModeName(int mode, int version)
 {
-    const char *namesCB2[] = { "RUNNING", "FREEDRIVE", "READY", "INITIALIZING", "SECURITY_STOPPED",
-                               "EMERGENCY_STOPPED", "FAULT", "NO_POWER", "NOT_CONNECTED", "SHUTDOWN" };
+    static const char *namesCB2[] = { "RUNNING", "FREEDRIVE", "READY", "INITIALIZING", "SECURITY_STOPPED",
+                                      "EMERGENCY_STOPPED", "FAULT", "NO_POWER", "NOT_CONNECTED", "SHUTDOWN" };
 
-    const char *namesCB3[] = { "DISCONNECTED", "CONFIRM_SAFETY", "BOOTING", "POWER_OFF", "POWER_ON",
-                               "IDLE", "BACKDRIVE", "RUNNING", "UPDATING_FIRMWARE" };
+    static const char *namesCB3[] = { "DISCONNECTED", "CONFIRM_SAFETY", "BOOTING", "POWER_OFF", "POWER_ON",
+                                      "IDLE", "BACKDRIVE", "RUNNING", "UPDATING_FIRMWARE" };
 
     std::string str;
     if (mode == ROBOT_MODE_NO_CONTROLLER)
@@ -150,11 +150,11 @@ std::string mtsUniversalRobotScriptRT::RobotModeName(int mode, int version)
 
 std::string mtsUniversalRobotScriptRT::JointModeName(int mode)
 {
-    const char *names[] = { "SHUTTING_DOWN", "PART_D_CALIBRATION", "BACKDRIVE", "POWER_OFF",
-                            "EMERGENCY_STOPPED", "CALVAL_INITIALIZATION", "ERROR",
-                            "FREEDRIVE", "SIMULATED", "NOT_RESPONDING", "MOTOR_INITIALISATION",
-                            "BOOTING", "PART_D_CALIBRATION_ERROR", "BOOTLOADER", "CALIBRATION",
-                            "SECURITY_STOPPED", "FAULT", "RUNNING", "INITIALISATION", "IDLE" };
+    static const char *names[] = { "SHUTTING_DOWN", "PART_D_CALIBRATION", "BACKDRIVE", "POWER_OFF",
+                                   "EMERGENCY_STOPPED", "CALVAL_INITIALIZATION", "ERROR",
+                                   "FREEDRIVE", "SIMULATED", "NOT_RESPONDING", "MOTOR_INITIALISATION",
+                                   "BOOTING", "PART_D_CALIBRATION_ERROR", "BOOTLOADER", "CALIBRATION",
+                                   "SECURITY_STOPPED", "FAULT", "RUNNING", "INITIALISATION", "IDLE" };
 
     std::string str;
     if ((mode >= JOINT_SHUTTING_DOWN_MODE) && (mode <= JOINT_IDLE_MODE))
@@ -166,9 +166,9 @@ std::string mtsUniversalRobotScriptRT::JointModeName(int mode)
 
 std::string mtsUniversalRobotScriptRT::SafetyModeName(int mode)
 {
-    const char *names[] = { "UNKNOWN", "NORMAL", "REDUCED", "PROTECTIVE_STOP", "RECOVERY",
-                            "SAFEGUARD_STOP", "SYSTEM_EMERGENCY_STOP", "ROBOT_EMERGENCY_STOP",
-                            "VIOLATION", "FAULT" };
+    static const char *names[] = { "UNKNOWN", "NORMAL", "REDUCED", "PROTECTIVE_STOP", "RECOVERY",
+                                   "SAFEGUARD_STOP", "SYSTEM_EMERGENCY_STOP", "ROBOT_EMERGENCY_STOP",
+                                   "VIOLATION", "FAULT" };
 
     std::string str;
     if (mode <= SAFETY_MODE_FAULT)
@@ -503,14 +503,19 @@ void mtsUniversalRobotScriptRT::Run(void)
             double *tool_vec = 0;
             if (version < VER_30_31) {
                 packet_pre_3 *packet = (packet_pre_3 *)(buffer);
-                // Documentation does not specify whether tool_Vector field is
-                // the actual or target Cartesian position.
+                // Documentation does not specify whether tool_Vector or TCP_speed
+                // are the actual or target Cartesian position or velocity.
+                // We assume they are the actual (measured) position or velocity.
                 tool_vec = packet->tool_Vector;
+                TCPSpeed.Assign(packet->TCP_speed);
+                TCPForce.Assign(packet->TCP_force);
                 safetyMode = SAFETY_MODE_UNKNOWN;
             }
             else if (version >= VER_30_31) {
                 packet_30_31 *packet = (packet_30_31 *)(buffer);
-                tool_vec = packet->tool_vec_Act;  // actual Cartesian position
+                tool_vec = packet->tool_vec_Act;         // actual Cartesian position
+                TCPSpeed.Assign(packet->TCP_speed_Act);  // actual Cartesian velocity
+                TCPForce.Assign(packet->TCP_force);
                 safetyMode = static_cast<int>(packet->safety_Mode+0.5);  // should always be positive
             }
             if (tool_vec) {
@@ -521,6 +526,8 @@ void mtsUniversalRobotScriptRT::Run(void)
                 vctFrm3 frm(cartRot, position);
                 CartPos.SetPosition(frm);
             }
+            CartVelParam.SetVelocity(TCPSpeed);
+            WrenchGet.SetForce(TCPForce);
             // Finished with packet; now preserve any extra data for next time
             if (packageLength < static_cast<unsigned long>(numBytes)) {
                 memmove(buffer, buffer+packageLength, numBytes-packageLength);
