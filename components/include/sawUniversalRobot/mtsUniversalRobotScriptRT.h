@@ -41,13 +41,23 @@ class CISST_EXPORT mtsUniversalRobotScriptRT : public mtsTaskContinuous
 
 public:
 
-    // RobotModes, defined in Client_Interface.xlsx. These do not seem to correspond to any
-    // definitions in the C API for Version 1.8 -- the closest definitions are in robotinterface.h.
-    enum RobotModes { ROBOT_MODE_DISCONNECTED, ROBOT_MODE_CONFIRM_SAFETY, ROBOT_MODE_BOOTING,
-                      ROBOT_MODE_POWER_OFF, ROBOT_MODE_POWER_ON, ROBOT_MODE_IDLE,
-                      ROBOT_MODE_BACKDRIVE, ROBOT_MODE_RUNNING, ROBOT_MODE_UPDATING_FIRMWARE };
+    // RobotModes: definition varies depending on Controller Box version. Fortunately, it is possible
+    // to distinguish versions from the firmware version: CB2 (and CB2.1) uses firmware up to Version 1.8,
+    // whereas CB3 (and CB3.1) uses firmware starting with Version 3.0.
+    // CB1: Not supported by this software (might be same as CB2)
+    // CB2: Defined in Dashboard Server how-to; also in C API for Version 1.8, file robotinterface.h
+    // CB3: Defined in Client_Interface.xlsx.
+    // For all versions, ROBOT_MODE_NO_CONTROLLER = -1
+    enum RobotModesCB2 { ROBOT_RUNNING_MODE, ROBOT_FREEDRIVE_MODE,
+                         ROBOT_READY_MODE, ROBOT_INITIALIZING_MODE, ROBOT_SECURITY_STOPPED_MODE,
+                         ROBOT_EMERGENCY_STOPPED_MODE, ROBOT_FAULT_MODE, ROBOT_NO_POWER_MODE,
+                         ROBOT_NOT_CONNECTED_MODE, ROBOT_SHUTDOWN_MODE };
+    enum RobotModesCB3 { ROBOT_MODE_DISCONNECTED, ROBOT_MODE_CONFIRM_SAFETY, ROBOT_MODE_BOOTING,
+                         ROBOT_MODE_POWER_OFF, ROBOT_MODE_POWER_ON, ROBOT_MODE_IDLE,
+                         ROBOT_MODE_BACKDRIVE, ROBOT_MODE_RUNNING, ROBOT_MODE_UPDATING_FIRMWARE };
+    enum { ROBOT_MODE_NO_CONTROLLER = -1 };
 
-    static std::string RobotModeName(unsigned int mode);
+    static std::string RobotModeName(int mode, int version);
 
     // JointModes available starting with firmware version 1.8. Some of these definitions are not
     // documented in the script interface (Client_Interface.xlsx), but were instead obtained from
@@ -73,7 +83,7 @@ public:
                       JOINT_INITIALISATION_MODE = 254,         // C API
                       JOINT_IDLE_MODE = 255 };
 
-    static std::string JointModeName(unsigned int mode);
+    static std::string JointModeName(int mode);
 
     // SafetyMode is available starting with firmware version 3.0. Since the value of 0 is not used by
     // Universal Robots, we define it to be SAFETY_MODE_UNKNOWN.
@@ -84,7 +94,7 @@ public:
                        SAFETY_MODE_ROBOT_EMERGENCY_STOP,    // Physical e-stop interface input
                        SAFETY_MODE_VIOLATION, SAFETY_MODE_FAULT };
 
-    static std::string SafetyModeName(unsigned int mode);
+    static std::string SafetyModeName(int mode);
 
 protected:
     enum {NB_Actuators = 6};
@@ -109,9 +119,9 @@ protected:
     // State table entries
     double ControllerTime;
     double ControllerExecTime;
-    unsigned int robotMode;
-    vctUInt6 jointModes;
-    unsigned int safetyMode;
+    int robotMode;
+    vctInt6 jointModes;
+    int safetyMode;
     bool isPowerOn;
     bool isEStop;
 

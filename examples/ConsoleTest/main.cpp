@@ -151,9 +151,9 @@ public:
         vctDoubleRot3 cartRot;
         vct6 debug;
         int version;
-        unsigned int robotMode;
-        vctUInt6 jointModes;
-        unsigned int safetyMode;
+        int robotMode;
+        vctInt6 jointModes;
+        int safetyMode;
         bool flag;
         const char *versionString[] = { "Unknown", "Pre-1.8", "1.8", "3.0/3.1", "3.2" };
         size_t i;
@@ -253,7 +253,8 @@ public:
                               << "Controller Execution Time: " << cExecTime << std::endl;
                     if (GetRobotMode.IsValid()) {
                         GetRobotMode(robotMode);
-                        std::cout  << "Robot Mode: " << mtsUniversalRobotScriptRT::RobotModeName(robotMode) << std::endl;
+                        GetVersion(version);
+                        std::cout  << "Robot Mode: " << mtsUniversalRobotScriptRT::RobotModeName(robotMode, version) << std::endl;
                     }
                     if (GetSafetyMode.IsValid()) {
                         GetSafetyMode(safetyMode);

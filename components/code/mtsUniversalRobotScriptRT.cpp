@@ -117,19 +117,38 @@ unsigned long mtsUniversalRobotScriptRT::PacketLength[VER_MAX] = {
 
 
 // Static methods
-std::string mtsUniversalRobotScriptRT::RobotModeName(unsigned int mode)
+std::string mtsUniversalRobotScriptRT::RobotModeName(int mode, int version)
 {
-    const char *names[] = { "DISCONNECTED", "CONFIRM_SAFETY", "BOOTING", "POWER_OFF", "POWER_ON",
-                            "IDLE", "BACKDRIVE", "RUNNING", "UPDATING_FIRMWARE" };
+    const char *namesCB2[] = { "RUNNING", "FREEDRIVE", "READY", "INITIALIZING", "SECURITY_STOPPED",
+                               "EMERGENCY_STOPPED", "FAULT", "NO_POWER", "NOT_CONNECTED", "SHUTDOWN" };
+
+    const char *namesCB3[] = { "DISCONNECTED", "CONFIRM_SAFETY", "BOOTING", "POWER_OFF", "POWER_ON",
+                               "IDLE", "BACKDRIVE", "RUNNING", "UPDATING_FIRMWARE" };
+
     std::string str;
-    if (mode <= ROBOT_MODE_UPDATING_FIRMWARE)
-        str.assign(names[mode]);
-    else
-        str.assign("INVALID");
+    if (mode == ROBOT_MODE_NO_CONTROLLER)
+        str.assign("NO_CONTROLLER");
+    else if ((version >= VER_PRE_18) && (version <= VER_18)) {
+        // Controller Box 2 (CB2), also includes CB2.1
+        if ((mode >= ROBOT_RUNNING_MODE) && (mode <= ROBOT_SHUTDOWN_MODE))
+            str.assign(namesCB2[mode]);
+        else
+            str.assign("INVALID");
+    }
+    else if ((version >= VER_30_31) && (version <= VER_32)) {
+        // Controller Box 3 (CB3), also includes CB3.1
+        if ((mode >= ROBOT_MODE_DISCONNECTED) && (mode <= ROBOT_MODE_UPDATING_FIRMWARE))
+            str.assign(namesCB3[mode]);
+        else
+            str.assign("INVALID");
+    }
+    else {
+        str.assign("INVALID FIRMWARE VERSION");
+    }
     return str;
 }
 
-std::string mtsUniversalRobotScriptRT::JointModeName(unsigned int mode)
+std::string mtsUniversalRobotScriptRT::JointModeName(int mode)
 {
     const char *names[] = { "SHUTTING_DOWN", "PART_D_CALIBRATION", "BACKDRIVE", "POWER_OFF",
                             "EMERGENCY_STOPPED", "CALVAL_INITIALIZATION", "ERROR",
@@ -145,7 +164,7 @@ std::string mtsUniversalRobotScriptRT::JointModeName(unsigned int mode)
     return str;
 }
 
-std::string mtsUniversalRobotScriptRT::SafetyModeName(unsigned int mode)
+std::string mtsUniversalRobotScriptRT::SafetyModeName(int mode)
 {
     const char *names[] = { "UNKNOWN", "NORMAL", "REDUCED", "PROTECTIVE_STOP", "RECOVERY",
                             "SAFEGUARD_STOP", "SYSTEM_EMERGENCY_STOP", "ROBOT_EMERGENCY_STOP",
@@ -185,7 +204,7 @@ void mtsUniversalRobotScriptRT::Init(void)
 
     ControllerTime = 0.0;
     ControllerExecTime = 0.0;
-    robotMode = ROBOT_MODE_DISCONNECTED;
+    robotMode = ROBOT_MODE_NO_CONTROLLER;
     jointModes.SetAll(0);  // Not a valid joint mode
     safetyMode = SAFETY_MODE_UNKNOWN;
     isPowerOn = false;
@@ -460,9 +479,14 @@ void mtsUniversalRobotScriptRT::Run(void)
             ControllerExecTime = base2->controller_Time;
             debug[1] = ControllerExecTime;
 
-            robotMode = static_cast<unsigned int>(base2->robot_Mode+0.5);
+            if (base2->robot_Mode < 0.0)
+                robotMode = static_cast<int>(base2->robot_Mode-0.5);
+            else
+                robotMode = static_cast<int>(base2->robot_Mode+0.5);
+
+            // joint_Modes should always be positive
             for (i = 0; i < NB_Actuators; i++)
-                jointModes[i] = static_cast<unsigned int>(base2->joint_Modes[i]+0.5);
+                jointModes[i] = static_cast<int>(base2->joint_Modes[i]+0.5);
 
             // We use the jointModes rather than robotMode to determine whether power is on because
             // the robotMode seems unreliable for some firmware versions, such as Version 1.8.
@@ -487,7 +511,7 @@ void mtsUniversalRobotScriptRT::Run(void)
             else if (version >= VER_30_31) {
                 packet_30_31 *packet = (packet_30_31 *)(buffer);
                 tool_vec = packet->tool_vec_Act;  // actual Cartesian position
-                safetyMode = static_cast<unsigned int>(packet->safety_Mode+0.5);
+                safetyMode = static_cast<int>(packet->safety_Mode+0.5);  // should always be positive
             }
             if (tool_vec) {
                 vct3 position(tool_vec);
