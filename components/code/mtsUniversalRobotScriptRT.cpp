@@ -209,6 +209,7 @@ void mtsUniversalRobotScriptRT::Init(void)
     safetyMode = SAFETY_MODE_UNKNOWN;
     isPowerOn = false;
     isEStop = false;
+    isSecurityStop = false;
     JointPos.SetSize(NB_Actuators);
     JointPos.SetAll(0.0);
     JointPosParam.SetSize(NB_Actuators);
@@ -224,6 +225,7 @@ void mtsUniversalRobotScriptRT::Init(void)
     JointTargetEffort.SetSize(NB_Actuators);
     JointTargetEffort.SetAll(0.0);
 
+    // Actual joint state (measured values)
     JointState.Name().SetSize(NB_Actuators);
     JointState.Name()[0] = "shoulder_pan_joint";
     JointState.Name()[1] = "shoulder_lift_joint";
@@ -234,6 +236,17 @@ void mtsUniversalRobotScriptRT::Init(void)
     JointState.Position().ForceAssign(JointPos);
     JointState.Velocity().ForceAssign(JointVel);
     JointState.Effort().ForceAssign(JointEffort);
+    // Desired joint state (commanded values)
+    JointStateDesired.Name().SetSize(NB_Actuators);
+    JointStateDesired.Name()[0] = "shoulder_pan_joint";
+    JointStateDesired.Name()[1] = "shoulder_lift_joint";
+    JointStateDesired.Name()[2] = "elbow_joint";
+    JointStateDesired.Name()[3] = "wrist_1_joint";
+    JointStateDesired.Name()[4] = "wrist_2_joint";
+    JointStateDesired.Name()[5] = "wrist_3_joint";
+    JointStateDesired.Position().ForceAssign(JointTargetPos);
+    JointStateDesired.Velocity().ForceAssign(JointTargetVel);
+    JointStateDesired.Effort().ForceAssign(JointTargetEffort);
     TCPSpeed.SetAll(0.0);
     TCPForce.SetAll(0.0);
     debug.SetAll(0.0);
@@ -244,6 +257,7 @@ void mtsUniversalRobotScriptRT::Init(void)
     StateTable.AddData(safetyMode, "SafetyMode");
     StateTable.AddData(isPowerOn, "IsPowerOn");
     StateTable.AddData(isEStop, "IsEStop");
+    StateTable.AddData(isSecurityStop, "IsSecurityStop");
     StateTable.AddData(JointPos, "PositionJoint");
     StateTable.AddData(JointPosParam, "PositionJointParam");
     StateTable.AddData(JointTargetPos, "PositionTargetJoint");
@@ -251,6 +265,7 @@ void mtsUniversalRobotScriptRT::Init(void)
     StateTable.AddData(JointVelParam, "VelocityJointParam");
     StateTable.AddData(JointTargetVel, "VelocityTargetJoint");
     StateTable.AddData(JointState, "JointState");
+    StateTable.AddData(JointStateDesired, "JointStateDesired");
     StateTable.AddData(CartPos, "PositionCartesian");
     StateTable.AddData(TCPSpeed, "VelocityCartesian");
     StateTable.AddData(CartVelParam, "VelocityCartesianParam");
@@ -267,7 +282,9 @@ void mtsUniversalRobotScriptRT::Init(void)
         mInterface->AddCommandReadState(this->StateTable, JointPosParam, "GetPositionJoint");
         mInterface->AddCommandReadState(this->StateTable, JointTargetPos, "GetPositionJointDesired");
         mInterface->AddCommandReadState(this->StateTable, JointVelParam, "GetVelocityJoint");
+        mInterface->AddCommandReadState(this->StateTable, JointTargetVel, "GetVelocityJointDesired");
         mInterface->AddCommandReadState(this->StateTable, JointState, "GetStateJoint");
+        mInterface->AddCommandReadState(this->StateTable, JointStateDesired, "GetStateJointDesired");
         mInterface->AddCommandReadState(this->StateTable, CartPos, "GetPositionCartesian");
         mInterface->AddCommandReadState(this->StateTable, CartVelParam, "GetVelocityCartesian");
         mInterface->AddCommandReadState(this->StateTable, WrenchGet, "GetWrenchBody");
@@ -284,8 +301,10 @@ void mtsUniversalRobotScriptRT::Init(void)
         mInterface->AddCommandReadState(StateTable, safetyMode, "GetSafetyMode");
         mInterface->AddCommandReadState(StateTable, isPowerOn, "IsMotorPowerOn");
         mInterface->AddCommandReadState(StateTable, isEStop, "IsEStop");
+        mInterface->AddCommandReadState(StateTable, isSecurityStop, "IsSecurityStop");
         mInterface->AddCommandVoid(&mtsUniversalRobotScriptRT::EnableMotorPower, this, "EnableMotorPower");
         mInterface->AddCommandVoid(&mtsUniversalRobotScriptRT::DisableMotorPower, this, "DisableMotorPower");
+        mInterface->AddCommandVoid(&mtsUniversalRobotScriptRT::UnlockSecurityStop, this, "UnlockSecurityStop");
         mInterface->AddCommandRead(&mtsUniversalRobotScriptRT::GetConnected, this, "GetConnected");
         mInterface->AddCommandRead(&mtsUniversalRobotScriptRT::GetAveragePeriod, this, "GetAveragePeriod");
         mInterface->AddCommandVoid(&mtsUniversalRobotScriptRT::StopMotion, this, "StopMotion");
@@ -463,14 +482,22 @@ void mtsUniversalRobotScriptRT::Run(void)
                 ControllerTime = base1->time;
                 JointPos.Assign(base1->qActual);
                 JointPosParam.SetPosition(JointPos);
+                JointTargetPos.Assign(base1->qTarget);
                 JointVel.Assign(base1->qdActual);
                 JointVelParam.SetVelocity(JointVel);
+                JointTargetVel.Assign(base1->qdTarget);
+                // Note that efforts are actually currents; should specify torque
+                // instead of current, but UR does not provide measured torque
+                // (i.e., provides I_Actual, I_Target, and M_Target, but not M_Actual).
                 JointEffort.Assign(base1->I_Actual);
                 JointTargetEffort.Assign(base1->I_Target);
 
                 JointState.Position().Assign(JointPos);
                 JointState.Velocity().Assign(JointVel);
                 JointState.Effort().Assign(JointEffort);
+                JointStateDesired.Position().Assign(JointTargetPos);
+                JointStateDesired.Velocity().Assign(JointTargetVel);
+                JointStateDesired.Effort().Assign(JointTargetEffort);
             }
             module2 *base2 = (version <= VER_18) ? (module2 *)(&((packet_pre_3 *)buffer)->base2)
                                                  : (module2 *)(&((packet_30_31 *)buffer)->base2);
@@ -497,9 +524,6 @@ void mtsUniversalRobotScriptRT::Run(void)
                         (jointModes.Equal(JOINT_FREEDRIVE_MODE)) ||
                         (jointModes.Equal(JOINT_INITIALISATION_MODE));
 
-            // Whether e-stop is pressed
-            isEStop = jointModes.Equal(JOINT_EMERGENCY_STOPPED_MODE);
-
             double *tool_vec = 0;
             if (version < VER_30_31) {
                 packet_pre_3 *packet = (packet_pre_3 *)(buffer);
@@ -510,6 +534,9 @@ void mtsUniversalRobotScriptRT::Run(void)
                 TCPSpeed.Assign(packet->TCP_speed);
                 TCPForce.Assign(packet->TCP_force);
                 safetyMode = SAFETY_MODE_UNKNOWN;
+                // Whether e-stop is pressed
+                isEStop = jointModes.Equal(JOINT_EMERGENCY_STOPPED_MODE);
+                isSecurityStop = false;   // TBD
             }
             else if (version >= VER_30_31) {
                 packet_30_31 *packet = (packet_30_31 *)(buffer);
@@ -517,6 +544,9 @@ void mtsUniversalRobotScriptRT::Run(void)
                 TCPSpeed.Assign(packet->TCP_speed_Act);  // actual Cartesian velocity
                 TCPForce.Assign(packet->TCP_force);
                 safetyMode = static_cast<int>(packet->safety_Mode+0.5);  // should always be positive
+                // Whether e-stop is pressed
+                isEStop = (safetyMode == SAFETY_MODE_ROBOT_EMERGENCY_STOP);
+                isSecurityStop = (safetyMode == SAFETY_MODE_PROTECTIVE_STOP);
             }
             if (tool_vec) {
                 vct3 position(tool_vec);
@@ -582,7 +612,7 @@ void mtsUniversalRobotScriptRT::Run(void)
         break;
 
     case UR_POS_MOVING:
-        // Need a better check for end of motion
+        // Need a better check for end of motion; maybe use JointTargetVel
         if ((JointVel.Norm() == 0.0) || (!isPowerOn))
             UR_State = UR_IDLE;
         break;
@@ -694,6 +724,13 @@ void mtsUniversalRobotScriptRT::EnableMotorPower(void)
 void mtsUniversalRobotScriptRT::DisableMotorPower(void)
 {
     if (socket.Send("power off\n") == -1)
+        SocketError();
+}
+
+void mtsUniversalRobotScriptRT::UnlockSecurityStop(void)
+{
+    // Following might only be valid in Version 3.1+
+    if (socket.Send("unlock protective stop\nclose safety popup\n") == -1)
         SocketError();
 }
 

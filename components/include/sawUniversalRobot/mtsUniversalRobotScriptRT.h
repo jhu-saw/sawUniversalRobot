@@ -124,6 +124,7 @@ protected:
     int safetyMode;
     bool isPowerOn;
     bool isEStop;
+    bool isSecurityStop;
 
     vctDoubleVec JointPos;                // Actual joint position
     prmPositionJointGet JointPosParam;    // Actual joint position (standard payload)
@@ -137,6 +138,7 @@ protected:
     vctDoubleVec JointTargetEffort;       // Desired joint current
 
     prmStateJoint JointState;
+    prmStateJoint JointStateDesired;
 
     prmPositionCartesianGet CartPos;      // Actual Cartesian position (standard payload)
     vct6 TCPSpeed;                        // Actual Cartesian velocity
@@ -168,6 +170,9 @@ protected:
     void EnableMotorPower(void);
     // Disable motor power
     void DisableMotorPower(void);
+
+    // Unlock after security (protective) stop
+    void UnlockSecurityStop(void);
 
     // Set Robot Modes
     void SetRobotFreeDriveMode(void);
