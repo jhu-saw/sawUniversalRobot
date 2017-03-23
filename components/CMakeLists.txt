@@ -40,12 +40,6 @@ if (cisst_FOUND_AS_REQUIRED)
 
   set (CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
-  if(CISST_BUILD_SHARED_LIBS)
-    set(IS_SHARED SHARED)
-  else(CISST_BUILD_SHARED_LIBS)
-    set(IS_SHARED STATIC)
-  endif(CISST_BUILD_SHARED_LIBS)
-
   # create/configure file for find_package (sawUniversalRobot)
   set (sawUniversalRobot_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include"
                                      "${CMAKE_CURRENT_BINARY_DIR}/include")
@@ -65,8 +59,10 @@ if (cisst_FOUND_AS_REQUIRED)
   include_directories (${sawUniversalRobot_INCLUDE_DIR})
 
   add_library (sawUniversalRobot ${IS_SHARED}
+               include/sawUniversalRobot/sawUniversalRobotExport.h
                include/sawUniversalRobot/mtsUniversalRobotScriptRT.h
                code/mtsUniversalRobotScriptRT.cpp)
+  set_property (TARGET sawUniversalRobot PROPERTY FOLDER "sawUniversalRobot")
 
   # Link with cisst libraries
   cisst_target_link_libraries (sawUniversalRobot

@@ -20,8 +20,8 @@ http://www.cisst.org/cisst/license.txt.
 #include <cisstCommon/cmnUnits.h>
 #include <cisstCommon/cmnCommandLineOptions.h>
 #include <cisstMultiTask/mtsTaskManager.h>
-#include <cisstMultiTask/mtsMessageQtWidget.h>
-#include <cisstMultiTask/mtsIntervalStatisticsQtWidget.h>
+#include <cisstMultiTask/mtsSystemQtWidget.h>
+#include <cisstParameterTypes/prmStateRobotQtWidget.h>
 #include <sawUniversalRobot/mtsUniversalRobotScriptRT.h>
 
 #include <ros/ros.h>
@@ -37,7 +37,7 @@ int main(int argc, char * argv[])
     cmnLogger::SetMask(CMN_LOG_ALLOW_ALL);
     cmnLogger::SetMaskFunction(CMN_LOG_ALLOW_ALL);
     cmnLogger::SetMaskDefaultLog(CMN_LOG_ALLOW_ALL);
-    cmnLogger::SetMaskClassMatching("mtsForceDimensionSDK", CMN_LOG_ALLOW_ALL);
+    cmnLogger::SetMaskClassMatching("mtsUniversalRobot", CMN_LOG_ALLOW_ALL);
     cmnLogger::AddChannel(std::cerr, CMN_LOG_ALLOW_ERRORS_AND_WARNINGS);
 
     // remove ROS args
@@ -55,7 +55,7 @@ int main(int argc, char * argv[])
                               cmnCommandLineOptions::REQUIRED_OPTION, &ipAddress);
     options.AddOptionOneValue("p", "ros-period",
                               "period in seconds to read all tool positions (default 0.01, 10 ms, 100Hz).  There is no point to have a period higher than the tracker component",
-                              cmnCommandLineOptions::OPTIONAL_OPTION, &rosPeriod);    
+                              cmnCommandLineOptions::OPTIONAL_OPTION, &rosPeriod);
 
     // check that all required options have been provided
     std::string errorMessage;
@@ -116,22 +116,21 @@ int main(int argc, char * argv[])
                               device->GetName(), "control");
 
     // Qt Widgets
-    // logs
-    mtsMessageQtWidgetComponent * messageWidget
-        = new mtsMessageQtWidgetComponent("UR-Messages");
-    messageWidget->Configure();
-    componentManager->AddComponent(messageWidget);
-    componentManager->Connect(messageWidget->GetName(), "Component",
+    prmStateRobotQtWidgetComponent * stateWidget
+        = new prmStateRobotQtWidgetComponent("UR-State");
+    stateWidget->Configure();
+    componentManager->AddComponent(stateWidget);
+    componentManager->Connect(stateWidget->GetName(), "Component",
                               device->GetName(), "control");
-    tabWidget->addTab(messageWidget, "Logs");
+    tabWidget->addTab(stateWidget, "State");
 
-    mtsIntervalStatisticsQtWidgetComponent * timeWidget
-        = new mtsIntervalStatisticsQtWidgetComponent("UR-Timing");
-    timeWidget->Configure();
-    componentManager->AddComponent(timeWidget);
-    componentManager->Connect(timeWidget->GetName(), "Component",
+    mtsSystemQtWidgetComponent * systemWidget
+        = new mtsSystemQtWidgetComponent("UR-System");
+    systemWidget->Configure();
+    componentManager->AddComponent(systemWidget);
+    componentManager->Connect(systemWidget->GetName(), "Component",
                               device->GetName(), "control");
-    tabWidget->addTab(timeWidget, "Timing");
+    tabWidget->addTab(systemWidget, "System");
 
     // create and start all components
     componentManager->CreateAllAndWait(5.0 * cmn_s);
