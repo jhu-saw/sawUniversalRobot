@@ -125,6 +125,7 @@ protected:
     bool isPowerOn;
     bool isEStop;
     bool isSecurityStop;
+    bool isMotionActive;
 
     vctDoubleVec JointPos;                // Actual joint position
     prmPositionJointGet JointPosParam;    // Actual joint position (standard payload)

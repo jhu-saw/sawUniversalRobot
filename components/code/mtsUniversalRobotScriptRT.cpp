@@ -210,6 +210,7 @@ void mtsUniversalRobotScriptRT::Init(void)
     isPowerOn = false;
     isEStop = false;
     isSecurityStop = false;
+    isMotionActive = false;
     JointPos.SetSize(NB_Actuators);
     JointPos.SetAll(0.0);
     JointPosParam.SetSize(NB_Actuators);
@@ -302,6 +303,7 @@ void mtsUniversalRobotScriptRT::Init(void)
         mInterface->AddCommandReadState(StateTable, isPowerOn, "IsMotorPowerOn");
         mInterface->AddCommandReadState(StateTable, isEStop, "IsEStop");
         mInterface->AddCommandReadState(StateTable, isSecurityStop, "IsSecurityStop");
+        mInterface->AddCommandReadState(StateTable, isMotionActive, "IsMotionActive");
         mInterface->AddCommandVoid(&mtsUniversalRobotScriptRT::EnableMotorPower, this, "EnableMotorPower");
         mInterface->AddCommandVoid(&mtsUniversalRobotScriptRT::DisableMotorPower, this, "DisableMotorPower");
         mInterface->AddCommandVoid(&mtsUniversalRobotScriptRT::UnlockSecurityStop, this, "UnlockSecurityStop");
@@ -534,9 +536,12 @@ void mtsUniversalRobotScriptRT::Run(void)
                 TCPSpeed.Assign(packet->TCP_speed);
                 TCPForce.Assign(packet->TCP_force);
                 safetyMode = SAFETY_MODE_UNKNOWN;
-                // Whether e-stop is pressed
+                // Whether e-stop is pressed.
+                // Could instead use (robotMode == ROBOT_EMERGENCY_STOPPED_MODE)
                 isEStop = jointModes.Equal(JOINT_EMERGENCY_STOPPED_MODE);
-                isSecurityStop = false;   // TBD
+                // Whether security stop is activated.
+                // Could instead use (robotMode == ROBOT_SECURITY_STOPPED_MODE)
+                isSecurityStop = jointModes.Equal(JOINT_SECURITY_STOPPED_MODE);
             }
             else if (version >= VER_30_31) {
                 packet_30_31 *packet = (packet_30_31 *)(buffer);
@@ -586,6 +591,9 @@ void mtsUniversalRobotScriptRT::Run(void)
 
     ProcessQueuedCommands();
 
+    isMotionActive = ((UR_State == UR_POS_MOVING) || (UR_State == UR_VEL_MOVING) ||
+                      (UR_State == UR_FREE_DRIVE));
+
     switch (UR_State) {
 
     case UR_IDLE:
@@ -612,8 +620,8 @@ void mtsUniversalRobotScriptRT::Run(void)
         break;
 
     case UR_POS_MOVING:
-        // Need a better check for end of motion; maybe use JointTargetVel
-        if ((JointVel.Norm() == 0.0) || (!isPowerOn))
+        // Motion is finished when target velocity is 0 or power is off
+        if ((!JointTargetVel.Any()) || (!isPowerOn))
             UR_State = UR_IDLE;
         break;
 
@@ -729,7 +737,7 @@ void mtsUniversalRobotScriptRT::DisableMotorPower(void)
 
 void mtsUniversalRobotScriptRT::UnlockSecurityStop(void)
 {
-    // Following might only be valid in Version 3.1+
+    // Following only valid in Version 3.1+
     if (socket.Send("unlock protective stop\nclose safety popup\n") == -1)
         SocketError();
 }
