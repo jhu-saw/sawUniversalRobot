@@ -259,6 +259,7 @@ void mtsUniversalRobotScriptRT::Init(void)
     StateTable.AddData(isPowerOn, "IsPowerOn");
     StateTable.AddData(isEStop, "IsEStop");
     StateTable.AddData(isSecurityStop, "IsSecurityStop");
+    StateTable.AddData(isMotionActive, "IsMotionActive");
     StateTable.AddData(JointPos, "PositionJoint");
     StateTable.AddData(JointPosParam, "PositionJointParam");
     StateTable.AddData(JointTargetPos, "PositionTargetJoint");
