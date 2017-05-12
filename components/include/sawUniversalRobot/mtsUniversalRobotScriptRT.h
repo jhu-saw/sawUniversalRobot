@@ -223,6 +223,10 @@ protected:
     // Flag used to indicate that robot used to be connected and needs to reconnect
     bool mShouldBeConnected;
 
+    // Socket to Dashboard server (port 29999)
+    osaSocket socketDB;
+    bool socketDBconnected;
+
     // Time since last
     double mTimeOfLastPacket;
 
@@ -238,7 +242,7 @@ protected:
     void ReceiveTimeout(void);
 
     // return TRUE on success, FALSE on fail
-    bool SendAndReceive(osaSocket &socket, std::string cmd, std::string &recv);
+    bool SendAndReceiveDB(const std::string &cmd, std::string &recv);
 
     mtsFunctionWrite PacketInvalid;
     mtsInterfaceProvided * mInterface;

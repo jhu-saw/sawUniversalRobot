@@ -194,6 +194,7 @@ mtsUniversalRobotScriptRT::mtsUniversalRobotScriptRT(const mtsTaskContinuousCons
 mtsUniversalRobotScriptRT::~mtsUniversalRobotScriptRT()
 {
     socket.Close();
+    socketDB.Close();
 }
 
 void mtsUniversalRobotScriptRT::Init(void)
@@ -201,6 +202,7 @@ void mtsUniversalRobotScriptRT::Init(void)
     UR_State = UR_NOT_CONNECTED;
     mShouldBeConnected = false;
     mTimeOfLastConnectAttempt = 0.0;
+    socketDBconnected = false;
 
     ControllerTime = 0.0;
     ControllerExecTime = 0.0;
@@ -315,7 +317,6 @@ void mtsUniversalRobotScriptRT::Init(void)
         mInterface->AddCommandVoid(&mtsUniversalRobotScriptRT::SetRobotFreeDriveMode, this, "SetRobotFreeDriveMode");
         mInterface->AddCommandReadState(StateTable, debug, "GetDebug");
         mInterface->AddCommandRead(&mtsUniversalRobotScriptRT::GetVersion, this, "GetVersion");
-//        mInterface->AddCommandRead(&mtsUniversalRobotScriptRT::GetPolyscopeVersion, this, "GetPolyscopeVersion");
 
         mInterface->AddEventVoid(SocketErrorEvent, "SocketError");
         mInterface->AddEventVoid(RobotNotReadyEvent, "RobotNotReady");
@@ -344,10 +345,18 @@ void mtsUniversalRobotScriptRT::Configure(const std::string &ipAddr)
         if (socket.Connect(ipAddress.c_str(), currentPort)) {
             UR_State = UR_IDLE;
             mShouldBeConnected = true;
-            CMN_LOG_CLASS_INIT_VERBOSE << "Configure: connected" << std::endl;
+            CMN_LOG_CLASS_INIT_VERBOSE << "Configure: connected to port " << currentPort << std::endl;
         }
         else {
             CMN_LOG_CLASS_INIT_ERROR << "Configure: socket not connected" << std::endl;
+        }
+        if (socketDB.Connect(ipAddress.c_str(), 29999)) {
+            socketDBconnected = true;
+            CMN_LOG_CLASS_INIT_VERBOSE << "Configure: connected to Dashboard Server" << std::endl;
+        }
+        else {
+            socketDBconnected = false;
+            CMN_LOG_CLASS_INIT_ERROR << "Socket not connected to dashboard server" << std::endl;
         }
     }
 
@@ -628,10 +637,18 @@ void mtsUniversalRobotScriptRT::Run(void)
 
     case UR_POWERING_ON:
         if (jointModes.Equal(JOINT_IDLE_MODE)) {
-            // Seems to be necessary to send another "power on" command
-            // before sending "brake release".
-            if (socket.Send("power on\nbrake release\n") == -1)
-                SocketError();
+            if (version < VER_30_31) {
+                // Seems to be necessary to send another "power on" command
+                // before sending "brake release".
+                if (socket.Send("power on\nbrake release\n") == -1)
+                    SocketError();
+            }
+            else {
+                // Starting with Version 3.0, send "brake release" command
+                // via Dashboard Server.
+                if (socketDB.Send("brake release\n") == -1)
+                    SocketError();
+            }
             UR_State = UR_IDLE;
         }
         else if (isEStop)
@@ -643,6 +660,16 @@ void mtsUniversalRobotScriptRT::Run(void)
 
     default:
         CMN_LOG_CLASS_RUN_ERROR << "Run: unknown state = " << UR_State << std::endl;
+    }
+
+    // Check for any responses via Dashboard server
+    if (socketDBconnected) {
+        char bufferDB[128];
+        int nBytes = socketDB.Receive(bufferDB, sizeof(bufferDB));
+        if (nBytes > 0) {
+            bufferDB[nBytes-1] = 0;  // Remove last character (newline)
+            mInterface->SendStatus(this->GetName() + "-DashboardServer: " + std::string(bufferDB));
+        }
     }
 }
 
@@ -670,12 +697,12 @@ void mtsUniversalRobotScriptRT::ReceiveTimeout(void)
 }
 
 
-bool mtsUniversalRobotScriptRT::SendAndReceive(osaSocket &socket, std::string cmd, std::string &recv)
+bool mtsUniversalRobotScriptRT::SendAndReceiveDB(const std::string &cmd, std::string &recv)
 {
     char buf[100];
-    if (socket.Send(cmd) < 0) return false;
+    if (socketDB.Send(cmd) < 0) return false;
     this->Sleep(0.1);   // wait for reply
-    if (socket.Receive(buf, 100) < 0) return false;
+    if (socketDB.Receive(buf, 100) < 0) return false;
 
     recv = buf;
     return true;
@@ -738,9 +765,13 @@ void mtsUniversalRobotScriptRT::DisableMotorPower(void)
 
 void mtsUniversalRobotScriptRT::UnlockSecurityStop(void)
 {
-    // Following only valid in Version 3.1+
-    if (socket.Send("unlock protective stop\nclose safety popup\n") == -1)
+    // Following works for at least Version 3.1+
+    if (socket.Send("set unlock protective stop\n") == -1)
         SocketError();
+    // Although Version 3.1 introduced "close safety popup", that does not seem
+    // to close the protective stop popup, whereas "close popup" works fine.
+    if (!socketDB.Send("close popup\n"))
+        CMN_LOG_CLASS_RUN_WARNING << "Failed to close popup" << std::endl;
 }
 
 void mtsUniversalRobotScriptRT::JointVelocityMove(const prmVelocityJointSet &jtvelSet)
@@ -769,7 +800,7 @@ void mtsUniversalRobotScriptRT::JointVelocityMove(const prmVelocityJointSet &jtv
                 "speedj([%6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf], %6.4lf, 0.1)\n",
                 jtvel[0], jtvel[1], jtvel[2], jtvel[3], jtvel[4], jtvel[5], 1.4);
         strcpy(VelCmdStop, "speedj([0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 1.4, 0.0)\n");
-        VelCmdTimeout = 100;   // Number of cycles for command to remain valid
+        VelCmdTimeout = 125;   // Number of cycles for command to remain valid (1 second)
         UR_State = UR_VEL_MOVING;
     }
     else
@@ -784,9 +815,10 @@ void mtsUniversalRobotScriptRT::JointPositionMove(const prmPositionJointSet &jtp
         jtposSet.GetGoal(jtpos);
         // For now, we issue a movej command; in the future, we may use a trajectory
         // generator and use servoj.
+        // a (acceleration) is in rad/sec^2; v (velocity) is in rad/sec
         sprintf(JointPosCmdString,
                 "movej([%6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf], a=%6.4lf, v=%6.4lf)\n",
-                jtpos[0], jtpos[1], jtpos[2], jtpos[3], jtpos[4], jtpos[5], 1.4, 0.2);
+                jtpos[0], jtpos[1], jtpos[2], jtpos[3], jtpos[4], jtpos[5], 1.0, 0.2);
         if (socket.Send(JointPosCmdString) == -1)
             SocketError();
         else
@@ -806,7 +838,7 @@ void mtsUniversalRobotScriptRT::CartesianVelocityMove(const prmVelocityCartesian
                 "speedl([%6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf], %6.4lf, 0.1)\n",
                 velxyz.X(), velxyz.Y(), velxyz.Z(), velrot.X(), velrot.Y(), velrot.Z(), 1.4);
         strcpy(VelCmdStop, "speedl([0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 1.4, 0.0)\n");
-        VelCmdTimeout = 100;   // Number of cycles for command to remain valid
+        VelCmdTimeout = 125;   // Number of cycles for command to remain valid (1 second)
         UR_State = UR_VEL_MOVING;
     }
     else
@@ -820,10 +852,13 @@ void mtsUniversalRobotScriptRT::CartesianPositionMove(const prmPositionCartesian
         vctDoubleFrm3 cartFrm = CartPos.GetGoal();
         vctRodriguezRotation3<double> rot;
         rot.From(cartFrm.Rotation());  // The rotation vector
+        // a (acceleration) is in m/s^2 and v (velocity) is in m/s.
+        // For now, use hard-coded values. In future, improve prmPositionCartesianSet
+        // to be able to reliably specify acceleration and velocity.
         sprintf(CartPosCmdString,
             "movel(p[%6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf], a=%6.4lf, v=%6.4lf)\n",
             cartFrm.Translation().X(), cartFrm.Translation().Y(), cartFrm.Translation().Z(),
-            rot.X(), rot.Y(), rot.Z(), 1.2, 0.08);
+            rot.X(), rot.Y(), rot.Z(), 0.8, 0.03);
         if (socket.Send(CartPosCmdString) == -1)
             SocketError();
         else
@@ -846,15 +881,7 @@ void mtsUniversalRobotScriptRT::StopMotion(void)
 
 void mtsUniversalRobotScriptRT::GetPolyscopeVersion(std::string &pver)
 {
-    osaSocket socketDB;    // Dashboard Server
-    if (socketDB.Connect(ipAddress.c_str(), 29999)) {
-        std::cout << "Connected to Dashboard Server" << std::endl;
-    }
-    else {
-        CMN_LOG_CLASS_INIT_ERROR << "Socket not connected to dashboard server" << std::endl;
-    }
-
-    SendAndReceive(socketDB, "PolyscopeVersion\n", pver);
+    SendAndReceiveDB("PolyscopeVersion\n", pver);
 
     std::vector<std::string> strings;
     std::string s;
@@ -873,6 +900,4 @@ void mtsUniversalRobotScriptRT::GetPolyscopeVersion(std::string &pver)
         pversion.bugfix = atoi(strings[2].c_str());
         std::cout << "major = " << strings[0].c_str() << "  minor = " << strings[1] << "  bugfix = " << strings[2] << "\n";
     }
-
-    socketDB.Close();
 }
