@@ -35,6 +35,7 @@ private:
     prmPositionCartesianSet cartposSet;
     prmVelocityJointSet jtvelSet;
     prmVelocityCartesianSet cartVelSet;
+    std::string buffer;
 
     mtsFunctionRead GetControllerTime;
     mtsFunctionRead GetControllerExecTime;
@@ -48,6 +49,8 @@ private:
     mtsFunctionWrite VelocityMoveJoint;
     mtsFunctionWrite VelocityMoveCartesian;
     mtsFunctionRead GetDebug;
+    mtsFunctionWrite SetPayload;
+    mtsFunctionWrite SendToDashboardServer;
     mtsFunctionRead GetRobotMode;
     mtsFunctionRead GetJointModes;
     mtsFunctionRead GetSafetyMode;
@@ -75,6 +78,17 @@ private:
                   << ", packageLength = " << len[1] << std::endl;
     }
 
+    void OnErrorEvent(const mtsMessage &msg) {
+        std::cout << std::endl << "Error: " << msg.Message << std::endl;
+    }
+    void OnWarningEvent(const mtsMessage &msg) {
+        std::cout << std::endl << "Warning: " << msg.Message << std::endl;
+    }
+    void OnStatusEvent(const mtsMessage &msg) {
+        std::cout << std::endl << "Status: " << msg.Message << std::endl;
+    }
+
+
 public:
 
     UniversalRobotClient() : mtsTaskMain("UniversalRobotClient"),
@@ -94,6 +108,8 @@ public:
             req->AddFunction("JointVelocityMove", VelocityMoveJoint);
             req->AddFunction("CartesianVelocityMove", VelocityMoveCartesian);
             req->AddFunction("GetDebug", GetDebug);
+            req->AddFunction("SetPayload", SetPayload);
+            req->AddFunction("SendToDashboardServer", SendToDashboardServer);
             req->AddFunction("GetVersion", GetVersion);
             req->AddFunction("GetRobotMode", GetRobotMode, MTS_OPTIONAL);
             req->AddFunction("GetJointModes", GetJointModes, MTS_OPTIONAL);
@@ -113,6 +129,9 @@ public:
                                      this, "ReceiveTimeout");
             req->AddEventHandlerWrite(&UniversalRobotClient::OnPacketInvalid,
                                      this, "PacketInvalid");
+            req->AddEventHandlerWrite(&UniversalRobotClient::OnErrorEvent, this, "Error");
+            req->AddEventHandlerWrite(&UniversalRobotClient::OnWarningEvent,this, "Warning");
+            req->AddEventHandlerWrite(&UniversalRobotClient::OnStatusEvent, this, "Status");
         }
     }
 
@@ -127,6 +146,8 @@ public:
                   << "  v: velocity move joints" << std::endl
                   << "  V: velocity move cartesian" << std::endl
                   << "  d: toggle debug data display" << std::endl
+                  << "  D: send command to dashboard server" << std::endl
+                  << "  p: set payload" << std::endl
                   << "  s: stop motion" << std::endl
                   << "  x: get version" << std::endl
                   << "  f: free drive mode" << std::endl
@@ -150,6 +171,7 @@ public:
         vct3 cartPos, cartVec;
         vctDoubleRot3 cartRot;
         vct6 debug;
+        double payload;
         int version;
         int robotMode;
         vctInt6 jointModes;
@@ -225,6 +247,19 @@ public:
 
                 case 'd':  // display debug data
                     debugMode = !debugMode;
+                    break;
+
+                case 'D':
+                    std::cout << std::endl << "Enter command: ";
+                    std::getline(std::cin, buffer);
+                    buffer.push_back('\n');
+                    SendToDashboardServer(buffer);
+                    break;
+
+                case 'p':
+                    std::cout << std::endl << "Enter payload (kg): ";
+                    std::cin >> payload;
+                    SetPayload(payload);
                     break;
 
                 case 's':   // stop motion

@@ -317,6 +317,11 @@ void mtsUniversalRobotScriptRT::Init(void)
         mInterface->AddCommandVoid(&mtsUniversalRobotScriptRT::SetRobotFreeDriveMode, this, "SetRobotFreeDriveMode");
         mInterface->AddCommandReadState(StateTable, debug, "GetDebug");
         mInterface->AddCommandRead(&mtsUniversalRobotScriptRT::GetVersion, this, "GetVersion");
+        mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::SetGravity, this, "SetGravity");
+        mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::SetPayload, this, "SetPayload");
+        mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::SetToolFrame, this, "SetToolFrame");
+        mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::ShowPopup, this, "ShowPopup");
+        mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::SendToDashboardServer, this, "SendToDashboardServer");
 
         mInterface->AddEventVoid(SocketErrorEvent, "SocketError");
         mInterface->AddEventVoid(RobotNotReadyEvent, "RobotNotReady");
@@ -878,6 +883,53 @@ void mtsUniversalRobotScriptRT::StopMotion(void)
     }
 }
 
+// Set the gravity vector; in the script manual, this appears to be multiplied by "g" (9.82)
+// rather than being a unit vector.
+void mtsUniversalRobotScriptRT::SetGravity(const vct3 &gravity)
+{
+    char buf[100];
+    sprintf(buf, "set_gravity([%8.3lf, %8.3lf, %8.3lf])\n", gravity.X(), gravity.Y(), gravity.Z());
+    if (socket.Send(buf) == -1)
+        SocketError();
+}
+
+// Set payload mass (kg). Robot can also accept a 3-vector for the center of mass.
+void mtsUniversalRobotScriptRT::SetPayload(const double &mass_kg)
+{
+    char buf[50];
+    sprintf(buf, "set_payload(%8.3lf)\n", mass_kg);
+    if (socket.Send(buf) == -1)
+        SocketError();
+}
+
+// Set transformation from output flange to TCP
+void mtsUniversalRobotScriptRT::SetToolFrame(const vctFrm3 &tcp)
+{
+    char buf[200];
+    vctRodriguezRotation3<double> rot;
+    rot.From(tcp.Rotation());
+    sprintf(buf, "set_tcp(p[%8.3lf, %8.3lf, %8.3lf, %8.4lf, %8.4lf, %8.4lf])\n",
+            tcp.Translation().X(), tcp.Translation().Y(), tcp.Translation().Z(),
+            rot.X(), rot.Y(), rot.Z());
+    if (socket.Send(buf) == -1)
+        SocketError();
+}
+
+// Show a popup message. The following parameters are left at their default values:
+//    title ("popup"), warning (false), and error (true).
+void mtsUniversalRobotScriptRT::ShowPopup(const std::string &msg)
+{
+    std::string buf("popup("+msg+")\n");
+    if (socket.Send(buf.c_str()) == -1)
+        SocketError();
+}
+
+// Send the command to the Dashboard Server
+void mtsUniversalRobotScriptRT::SendToDashboardServer(const std::string &msg)
+{
+    if (socket.Send(msg.c_str()) == -1)
+        SocketError();
+}
 
 void mtsUniversalRobotScriptRT::GetPolyscopeVersion(std::string &pver)
 {

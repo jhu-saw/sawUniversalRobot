@@ -206,6 +206,22 @@ protected:
         ver = static_cast<int>(version);
     }
 
+    // Set the gravity vector
+    void SetGravity(const vct3 &gravity);
+
+    // Set payload mass (kg). Robot can also accept a 3-vector
+    // for the center of mass.
+    void SetPayload(const double &mass_kg);
+
+    // Set transformation from output flange to TCP
+    void SetToolFrame(const vctFrm3 &tcp);
+
+    // Display a popup message on the robot pendant
+    void ShowPopup(const std::string &msg);
+
+    // Send command to Dashboard Server
+    void SendToDashboardServer(const std::string &msg);
+
     void GetPolyscopeVersion(std::string &pver);
 
     // Connection Parameters
