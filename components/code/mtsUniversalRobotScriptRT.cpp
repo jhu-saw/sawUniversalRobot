@@ -919,7 +919,7 @@ void mtsUniversalRobotScriptRT::SetToolFrame(const vctFrm3 &tcp)
 //    title ("popup"), warning (false), and error (true).
 void mtsUniversalRobotScriptRT::ShowPopup(const std::string &msg)
 {
-    std::string buf("popup("+msg+")\n");
+    std::string buf("popup(\"" + msg + "\")\n");
     if (socket.Send(buf.c_str()) == -1)
         SocketError();
 }
@@ -927,7 +927,7 @@ void mtsUniversalRobotScriptRT::ShowPopup(const std::string &msg)
 // Send the command to the Dashboard Server
 void mtsUniversalRobotScriptRT::SendToDashboardServer(const std::string &msg)
 {
-    if (socket.Send(msg.c_str()) == -1)
+    if (socketDB.Send(msg.c_str()) == -1)
         SocketError();
 }
 

@@ -50,6 +50,7 @@ private:
     mtsFunctionWrite VelocityMoveCartesian;
     mtsFunctionRead GetDebug;
     mtsFunctionWrite SetPayload;
+    mtsFunctionWrite ShowPopup;
     mtsFunctionWrite SendToDashboardServer;
     mtsFunctionRead GetRobotMode;
     mtsFunctionRead GetJointModes;
@@ -109,6 +110,7 @@ public:
             req->AddFunction("CartesianVelocityMove", VelocityMoveCartesian);
             req->AddFunction("GetDebug", GetDebug);
             req->AddFunction("SetPayload", SetPayload);
+            req->AddFunction("ShowPopup", ShowPopup);
             req->AddFunction("SendToDashboardServer", SendToDashboardServer);
             req->AddFunction("GetVersion", GetVersion);
             req->AddFunction("GetRobotMode", GetRobotMode, MTS_OPTIONAL);
@@ -148,12 +150,13 @@ public:
                   << "  d: toggle debug data display" << std::endl
                   << "  D: send command to dashboard server" << std::endl
                   << "  p: set payload" << std::endl
+                  << "  P: show popup message" << std::endl
                   << "  s: stop motion" << std::endl
                   << "  x: get version" << std::endl
                   << "  f: free drive mode" << std::endl
                   << "  r: running mode" << std::endl
                   << "  i: display robot info (e.g., times, modes)" << std::endl
-                  << "  e: disable motor power" << std::endl
+                  << "  e: enable motor power" << std::endl
                   << "  n: disable motor power" << std::endl
                   << "  q: quit" << std::endl;
     }
@@ -260,6 +263,12 @@ public:
                     std::cout << std::endl << "Enter payload (kg): ";
                     std::cin >> payload;
                     SetPayload(payload);
+                    break;
+
+                case 'P':
+                    std::cout << std::endl << "Enter message: ";
+                    std::getline(std::cin, buffer);
+                    ShowPopup(buffer);
                     break;
 
                 case 's':   // stop motion
