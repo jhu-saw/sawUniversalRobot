@@ -533,13 +533,12 @@ void mtsUniversalRobotScriptRT::Run(void)
                 jointModes[i] = static_cast<int>(base2->joint_Modes[i]+0.5);
 
             // We use the jointModes rather than robotMode to determine whether power is on because
-            // the robotMode seems unreliable for some firmware versions, such as Version 1.8.
-            // If using robotMode, could assume that power is on if we are in ROBOT_MODE_POWER_ON,
-            // ROBOT_MODE_BACKDRIVE, or ROBOT_MODE_RUNNING states.
-            // For jointModes, power is on if we are RUNNING, FREEDRIVE, and INITIALISATION.
-            isPowerOn = (jointModes.Equal(JOINT_RUNNING_MODE)) ||
-                        (jointModes.Equal(JOINT_FREEDRIVE_MODE)) ||
-                        (jointModes.Equal(JOINT_INITIALISATION_MODE));
+            // the defined jointModes are consistent between firmware versions, whereas robotMode is not.
+            // For jointModes, power is on if we are RUNNING, FREEDRIVE, INITIALISATION, or SECURITY_STOPPED.
+            isPowerOn = (jointModes.Equal(JOINT_RUNNING_MODE) ||
+                         jointModes.Equal(JOINT_FREEDRIVE_MODE) ||
+                         jointModes.Equal(JOINT_INITIALISATION_MODE) ||
+                         jointModes.Equal(JOINT_SECURITY_STOPPED_MODE));
 
             double *tool_vec = 0;
             if (version < VER_30_31) {
@@ -770,13 +769,23 @@ void mtsUniversalRobotScriptRT::DisableMotorPower(void)
 
 void mtsUniversalRobotScriptRT::UnlockSecurityStop(void)
 {
-    // Following works for at least Version 3.1+
-    if (socket.Send("set unlock protective stop\n") == -1)
-        SocketError();
-    // Although Version 3.1 introduced "close safety popup", that does not seem
-    // to close the protective stop popup, whereas "close popup" works fine.
-    if (!socketDB.Send("close popup\n"))
-        CMN_LOG_CLASS_RUN_WARNING << "Failed to close popup" << std::endl;
+    if (version >= VER_30_31) {
+        // This code has been verified to work with Version 3.1. It is not known whether it works
+        // with Version 3.0.  It does not work with Version 1.8.
+        // Although not documented, it seems that sending "set unlock protective stop" via the script
+        // interface works. An alternative would be to send "unlock protective stop" to the dashboard
+        // server (socketDB), which is supported by Version 3.1+.
+        if (socket.Send("set unlock protective stop\n") == -1)
+            SocketError();
+        // Although Version 3.1 introduced "close safety popup", that does not seem to close the
+        // protective stop popup, whereas "close popup" works fine. Note that "close popup" is supported
+        // starting with Version 1.6, but is not used for those older versions because there is no
+        // benefit to closing the popup when the protective stop is still asserted.
+        if (!socketDB.Send("close popup\n"))
+            CMN_LOG_CLASS_RUN_WARNING << "Failed to close popup" << std::endl;
+    }
+    else
+        mInterface->SendWarning(this->GetName() + ": UnlockSecurityStop not supported for this firmware version");
 }
 
 void mtsUniversalRobotScriptRT::JointVelocityMove(const prmVelocityJointSet &jtvelSet)
