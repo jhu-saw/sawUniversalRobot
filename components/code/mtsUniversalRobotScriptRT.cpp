@@ -631,6 +631,14 @@ void mtsUniversalRobotScriptRT::Run(void)
     case UR_FREE_DRIVE:
         if (!isPowerOn)
             UR_State = UR_IDLE;
+        else if (version >= VER_30_31) {
+            // Also using VelCmdTimeout, VelCmdString for free drive mode
+            VelCmdTimeout--;
+            if (VelCmdTimeout <= 0) {
+                VelCmdTimeout = 125;   // 1 second
+                socket.Send(VelCmdString);
+            }
+        }
         break;
 
     case UR_POS_MOVING:
@@ -715,19 +723,17 @@ bool mtsUniversalRobotScriptRT::SendAndReceiveDB(const std::string &cmd, std::st
 void mtsUniversalRobotScriptRT::SetRobotFreeDriveMode(void)
 {
     if ((UR_State == UR_IDLE) || (UR_State == UR_FREE_DRIVE)) {
-        int ret;
         if (version < VER_30_31) {
-            ret = socket.Send("set robotmode freedrive\n");
+            if (socket.Send("set robotmode freedrive\n") == -1)
+                SocketError();
         } else {
-            ret = socket.Send("def saw_ur_freedrive():\n\tfreedrive_mode()\n\tsleep(20)\nend\n");
+            VelCmdTimeout = 0;
+            strcpy(VelCmdString, "def saw_ur_freedrive():\n\tfreedrive_mode()\n\tsleep(1.5)\nend\n");
+            // This string will be sent from the Run method, once every 125 loops (1 second).
+            // The programmed sleep is for 1.5 seconds, which should be long enough.
         }
-
-        if (ret == -1) {
-            SocketError();
-        } else {
-            UR_State = UR_FREE_DRIVE;
-            mInterface->SendStatus(this->GetName() + ": set freedrive mode");
-        }
+        UR_State = UR_FREE_DRIVE;
+        mInterface->SendStatus(this->GetName() + ": set freedrive mode");
     }
     else
         RobotNotReady();   // if not idle, ignore command and raise event
