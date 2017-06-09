@@ -252,6 +252,8 @@ void mtsUniversalRobotScriptRT::Init(void)
     JointStateDesired.Effort().ForceAssign(JointTargetEffort);
     TCPSpeed.SetAll(0.0);
     TCPForce.SetAll(0.0);
+    jtpos.SetSize(NB_Actuators);
+    jtvel.SetSize(NB_Actuators);
     debug.SetAll(0.0);
     StateTable.AddData(ControllerTime, "ControllerTime");
     StateTable.AddData(ControllerExecTime, "ControllerExecTime");
@@ -535,10 +537,14 @@ void mtsUniversalRobotScriptRT::Run(void)
             // We use the jointModes rather than robotMode to determine whether power is on because
             // the defined jointModes are consistent between firmware versions, whereas robotMode is not.
             // For jointModes, power is on if we are RUNNING, FREEDRIVE, INITIALISATION, or SECURITY_STOPPED.
-            isPowerOn = (jointModes.Equal(JOINT_RUNNING_MODE) ||
-                         jointModes.Equal(JOINT_FREEDRIVE_MODE) ||
-                         jointModes.Equal(JOINT_INITIALISATION_MODE) ||
-                         jointModes.Equal(JOINT_SECURITY_STOPPED_MODE));
+            // The following code handles joints in any combination of the above states (e.g., some joints
+            // can be in JOINT_INITIALISATION_MODE while the rest of the joints are in JOINT_RUNNING_MODE).
+            // Note that in cisstVector, addition is specialized as logical OR for boolean vectors.
+            vctBool6 jointHasPower(jointModes.ElementwiseEqual(JOINT_RUNNING_MODE));
+            jointHasPower.Add(jointModes.ElementwiseEqual(JOINT_FREEDRIVE_MODE));
+            jointHasPower.Add(jointModes.ElementwiseEqual(JOINT_INITIALISATION_MODE));
+            jointHasPower.Add(jointModes.ElementwiseEqual(JOINT_SECURITY_STOPPED_MODE));
+            isPowerOn = jointHasPower.All();
 
             double *tool_vec = 0;
             if (version < VER_30_31) {
@@ -797,7 +803,6 @@ void mtsUniversalRobotScriptRT::UnlockSecurityStop(void)
 void mtsUniversalRobotScriptRT::JointVelocityMove(const prmVelocityJointSet &jtvelSet)
 {
     if ((UR_State == UR_IDLE) || (UR_State == UR_VEL_MOVING)) {
-        vctDoubleVec jtvel(NB_Actuators);
         jtvelSet.GetGoal(jtvel);
         // velocity check
         for (int i = 0; i < NB_Actuators; i++) {
@@ -816,10 +821,19 @@ void mtsUniversalRobotScriptRT::JointVelocityMove(const prmVelocityJointSet &jtv
         }
         // String length is about 28 + 6*7 = 70; set it to 100 to be sure
         // speedj(qd, a, t)
-        sprintf(VelCmdString,
-                "speedj([%6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf], %6.4lf, 0.1)\n",
-                jtvel[0], jtvel[1], jtvel[2], jtvel[3], jtvel[4], jtvel[5], 1.4);
-        strcpy(VelCmdStop, "speedj([0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 1.4, 0.0)\n");
+        // CB2 (firmware versions 1.8 or less) use speedj_init when the robot is initializing (homing).
+        if ((version <= VER_18) && (robotMode == ROBOT_INITIALIZING_MODE)) {
+            sprintf(VelCmdString,
+                    "speedj_init([%6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf], %6.4lf, 0.1)\n",
+                    jtvel[0], jtvel[1], jtvel[2], jtvel[3], jtvel[4], jtvel[5], 1.4);
+            strcpy(VelCmdStop, "speedj_init([0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 1.4, 0.0)\n");
+        }
+        else {
+            sprintf(VelCmdString,
+                    "speedj([%6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf], %6.4lf, 0.1)\n",
+                    jtvel[0], jtvel[1], jtvel[2], jtvel[3], jtvel[4], jtvel[5], 1.4);
+            strcpy(VelCmdStop, "speedj([0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 1.4, 0.0)\n");
+        }
         VelCmdTimeout = 125;   // Number of cycles for command to remain valid (1 second)
         UR_State = UR_VEL_MOVING;
     }
@@ -831,7 +845,6 @@ void mtsUniversalRobotScriptRT::JointPositionMove(const prmPositionJointSet &jtp
 {
     char JointPosCmdString[100];
     if (UR_State == UR_IDLE) {
-        vctDoubleVec jtpos(NB_Actuators);
         jtposSet.GetGoal(jtpos);
         // For now, we issue a movej command; in the future, we may use a trajectory
         // generator and use servoj.

@@ -149,6 +149,8 @@ protected:
     prmForceCartesianGet WrenchGet;       // Actual Cartesian force/torque (standard payload)
 
     // Internal use
+    vctDoubleVec jtpos;
+    vctDoubleVec jtvel;
     char VelCmdString[100];
     char VelCmdStop[100];
     int  VelCmdTimeout;
