@@ -103,6 +103,12 @@ int main(int argc, char * argv[])
     rosBridge->AddSubscriberToCommandWrite<prmVelocityCartesianSet, geometry_msgs::TwistStamped>
             ("Component", "CartesianVelocityMove", "CartesianVelocityMove");
 
+
+    rosBridge->AddSubscriberToCommandWrite<prmPositionCartesianSet, geometry_msgs::PoseStamped>
+            ("Component", "CartesianPositionMove", "CartesianPositionMove");
+
+
+    
     rosBridge->AddLogFromEventWrite("Component", "Error",
                                     mtsROSEventWriteLog::ROS_LOG_ERROR);
     rosBridge->AddLogFromEventWrite("Component", "Warning",
