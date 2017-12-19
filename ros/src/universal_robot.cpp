@@ -19,6 +19,7 @@ http://www.cisst.org/cisst/license.txt.
 #include <cisstCommon/cmnPath.h>
 #include <cisstCommon/cmnUnits.h>
 #include <cisstCommon/cmnCommandLineOptions.h>
+#include <cisstCommon/cmnQt.h>
 #include <cisstMultiTask/mtsTaskManager.h>
 #include <cisstMultiTask/mtsSystemQtWidget.h>
 #include <cisstParameterTypes/prmStateRobotQtWidget.h>
@@ -77,10 +78,11 @@ int main(int argc, char * argv[])
     componentManager->AddComponent(device);
 
     // ROS bridge
-    mtsROSBridge * rosBridge = new mtsROSBridge("URBridge", rosPeriod, true);
+    mtsROSBridge * rosBridge = new mtsROSBridge("URBridge", rosPeriod, true, false); // spin, don't catch sigint
 
     // create a Qt user interface
     QApplication application(argc, argv);
+    cmnQt::QApplicationExitsOnCtrlC();
 
     // organize all widgets in a tab widget
     QTabWidget * tabWidget = new QTabWidget;
@@ -103,12 +105,9 @@ int main(int argc, char * argv[])
     rosBridge->AddSubscriberToCommandWrite<prmVelocityCartesianSet, geometry_msgs::TwistStamped>
             ("Component", "CartesianVelocityMove", "CartesianVelocityMove");
 
-
     rosBridge->AddSubscriberToCommandWrite<prmPositionCartesianSet, geometry_msgs::PoseStamped>
             ("Component", "CartesianPositionMove", "CartesianPositionMove");
 
-
-    
     rosBridge->AddLogFromEventWrite("Component", "Error",
                                     mtsROSEventWriteLog::ROS_LOG_ERROR);
     rosBridge->AddLogFromEventWrite("Component", "Warning",
