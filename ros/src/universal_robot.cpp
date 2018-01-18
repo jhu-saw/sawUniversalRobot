@@ -5,7 +5,7 @@
   Author(s):  Anton Deguet
   Created on: 2017-02-22
 
-  (C) Copyright 2017 Johns Hopkins University (JHU), All Rights Reserved.
+  (C) Copyright 2017-2018 Johns Hopkins University (JHU), All Rights Reserved.
 
 --- begin cisst license - do not edit ---
 
@@ -107,6 +107,9 @@ int main(int argc, char * argv[])
 
     rosBridge->AddSubscriberToCommandWrite<prmPositionCartesianSet, geometry_msgs::PoseStamped>
             ("Component", "CartesianPositionMove", "CartesianPositionMove");
+
+    rosBridge->AddSubscriberToCommandWrite<vctFrm3, geometry_msgs::PoseStamped>
+        ("Component", "SetToolFrame", "SetToolFrame");
 
     rosBridge->AddLogFromEventWrite("Component", "Error",
                                     mtsROSEventWriteLog::ROS_LOG_ERROR);
