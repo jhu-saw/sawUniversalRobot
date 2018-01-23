@@ -99,9 +99,16 @@ struct packet_30_31 {
 #pragma pack(pop)
 
 #pragma pack(push, 1)
-struct packet_32 : packet_30_31 {
+struct packet_32_34 : packet_30_31 {
     unsigned long long digital_Output; // Digital outputs
     double program_State;     // Program state
+};
+#pragma pack(pop)
+
+#pragma pack(push, 1)
+struct packet_35 : packet_32_34 {
+    double elbow_position[3];
+    double elbow_velocity[3];
 };
 #pragma pack(pop)
 
@@ -112,7 +119,8 @@ unsigned long mtsUniversalRobotScriptRT::PacketLength[VER_MAX] = {
      764,  // VER_PRE_18
      812,  // VER_18
     1044,  // VER_30_31
-    1060   // VER_32 (up to at least Version 3.4)
+    1060,  // VER_32_34
+    1076   // VER_35
 };
 
 
@@ -135,7 +143,7 @@ std::string mtsUniversalRobotScriptRT::RobotModeName(int mode, int version)
         else
             str.assign("INVALID");
     }
-    else if ((version >= VER_30_31) && (version <= VER_32)) {
+    else if ((version >= VER_30_31) && (version <= VER_35)) {
         // Controller Box 3 (CB3), also includes CB3.1
         if ((mode >= ROBOT_MODE_DISCONNECTED) && (mode <= ROBOT_MODE_UPDATING_FIRMWARE))
             str.assign(namesCB3[mode]);

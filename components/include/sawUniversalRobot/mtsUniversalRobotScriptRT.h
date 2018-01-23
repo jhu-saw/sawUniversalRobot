@@ -159,7 +159,7 @@ protected:
     vct6 debug;
 
     // For UR version determination
-    enum FirmwareVersion {VER_UNKNOWN, VER_PRE_18, VER_18, VER_30_31, VER_32, VER_MAX};
+    enum FirmwareVersion {VER_UNKNOWN, VER_PRE_18, VER_18, VER_30_31, VER_32_34, VER_35, VER_MAX};
     FirmwareVersion version;
     static unsigned long PacketLength[VER_MAX];
     unsigned long PacketCount[VER_MAX];
