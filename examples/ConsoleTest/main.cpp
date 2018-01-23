@@ -180,7 +180,7 @@ public:
         vctInt6 jointModes;
         int safetyMode;
         bool flag;
-        const char *versionString[] = { "Unknown", "Pre-1.8", "1.8", "3.0/3.1", "3.2" };
+        const char *versionString[] = { "Unknown", "Pre-1.8", "1.8", "3.0-3.1", "3.2-3.4", "3.5" };
         size_t i;
 
         ProcessQueuedEvents();
