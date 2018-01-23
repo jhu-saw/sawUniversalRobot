@@ -4,7 +4,7 @@
 /*
   Author(s): Peter Kazanzides, H. Tutkun Sen, Shuyang Chen
 
-  (C) Copyright 2016-2017 Johns Hopkins University (JHU), All Rights Reserved.
+  (C) Copyright 2016-2018 Johns Hopkins University (JHU), All Rights Reserved.
 
 --- begin cisst license - do not edit ---
 
@@ -330,6 +330,7 @@ void mtsUniversalRobotScriptRT::Init(void)
         mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::SetGravity, this, "SetGravity");
         mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::SetPayload, this, "SetPayload");
         mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::SetToolFrame, this, "SetToolFrame");
+        mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::SetToolVoltage, this, "SetToolVoltage");
         mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::ShowPopup, this, "ShowPopup");
         mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::SendToDashboardServer, this, "SendToDashboardServer");
 
@@ -930,6 +931,7 @@ void mtsUniversalRobotScriptRT::SetGravity(const vct3 &gravity)
 }
 
 // Set payload mass (kg). Robot can also accept a 3-vector for the center of mass.
+// Note: starting with Version 3.3, the script interface also has set_payload_mass and set_payload_cog.
 void mtsUniversalRobotScriptRT::SetPayload(const double &mass_kg)
 {
     char buf[50];
@@ -949,6 +951,25 @@ void mtsUniversalRobotScriptRT::SetToolFrame(const vctFrm3 &tcp)
             rot.X(), rot.Y(), rot.Z());
     if (socket.Send(buf) == -1)
         SocketError();
+}
+
+// Set power supply voltage at end effector (0, 12, or 24)
+void mtsUniversalRobotScriptRT::SetToolVoltage(const int &voltage)
+{
+    char buf[100];
+    if ((voltage == 0) || (voltage == 12) || (voltage == 24)) {
+        sprintf(buf, "set_tool_voltage(%d)\n", voltage);
+        if (socket.Send(buf) == -1)
+            SocketError();
+        else {
+            sprintf(buf, ": setting tool voltage to %dV", voltage);
+            mInterface->SendStatus(this->GetName() + buf);
+        }
+    }
+    else {
+        sprintf(buf, ": invalid voltage: %d", voltage);
+        mInterface->SendWarning(this->GetName() + buf);
+    }
 }
 
 // Show a popup message. The following parameters are left at their default values:

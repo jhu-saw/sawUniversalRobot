@@ -2,7 +2,7 @@
 /*ex: set filetype=cpp softtabstop=4 shiftwidth=4 tabstop=4 cindent expandtab:*/
 
 /*
-(C) Copyright 2016-2017 Johns Hopkins University (JHU), All Rights Reserved.
+(C) Copyright 2016-2018 Johns Hopkins University (JHU), All Rights Reserved.
 
 --- begin cisst license - do not edit ---
 
@@ -50,6 +50,7 @@ private:
     mtsFunctionWrite VelocityMoveCartesian;
     mtsFunctionRead GetDebug;
     mtsFunctionWrite SetPayload;
+    mtsFunctionWrite SetToolVoltage;
     mtsFunctionWrite ShowPopup;
     mtsFunctionWrite SendToDashboardServer;
     mtsFunctionRead GetRobotMode;
@@ -110,6 +111,7 @@ public:
             req->AddFunction("CartesianVelocityMove", VelocityMoveCartesian);
             req->AddFunction("GetDebug", GetDebug);
             req->AddFunction("SetPayload", SetPayload);
+            req->AddFunction("SetToolVoltage", SetToolVoltage);
             req->AddFunction("ShowPopup", ShowPopup);
             req->AddFunction("SendToDashboardServer", SendToDashboardServer);
             req->AddFunction("GetVersion", GetVersion);
@@ -158,6 +160,7 @@ public:
                   << "  i: display robot info (e.g., times, modes)" << std::endl
                   << "  e: enable motor power" << std::endl
                   << "  n: disable motor power" << std::endl
+                  << "  t: set tool voltage (0, 12, or 24)" << std::endl
                   << "  q: quit" << std::endl;
     }
 
@@ -175,6 +178,7 @@ public:
         vctDoubleRot3 cartRot;
         vct6 debug;
         double payload;
+        int toolVoltage;
         int version;
         int robotMode;
         vctInt6 jointModes;
@@ -329,6 +333,12 @@ public:
 
                 case 'n':   // disable motor power
                     DisableMotorPower();
+                    break;
+
+                case 't':   // set tool voltage
+                    std::cout << std::endl << "Enter tool voltage (0, 12, or 24): ";
+                    std::cin >> toolVoltage;
+                    SetToolVoltage(toolVoltage);
                     break;
 
                 case 'q':   // quit program

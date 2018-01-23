@@ -4,7 +4,7 @@
 /*
   Author(s): Peter Kazanzides, H. Tutkun Sen, Shuyang Chen
 
-  (C) Copyright 2016-2017 Johns Hopkins University (JHU), All Rights Reserved.
+  (C) Copyright 2016-2018 Johns Hopkins University (JHU), All Rights Reserved.
 
 --- begin cisst license - do not edit ---
 
@@ -217,6 +217,9 @@ protected:
 
     // Set transformation from output flange to TCP
     void SetToolFrame(const vctFrm3 &tcp);
+
+    // Set tool (power supply) voltage; valid values are 0, 12, or 24.
+    void SetToolVoltage(const int &voltage);
 
     // Display a popup message on the robot pendant
     void ShowPopup(const std::string &msg);
