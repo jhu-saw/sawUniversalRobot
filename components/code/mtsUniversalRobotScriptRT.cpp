@@ -120,7 +120,7 @@ unsigned long mtsUniversalRobotScriptRT::PacketLength[VER_MAX] = {
      812,  // VER_18
     1044,  // VER_30_31
     1060,  // VER_32_34
-    1076   // VER_35
+    1108   // VER_35
 };
 
 
