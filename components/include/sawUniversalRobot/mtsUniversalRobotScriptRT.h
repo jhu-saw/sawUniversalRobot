@@ -196,6 +196,11 @@ protected:
     // Cartesian position move
     void CartesianPositionMove(const prmPositionCartesianSet &cartPos);
 
+    // crtk/dVRK compatibility
+    void servo_cp(const prmPositionCartesianSet &cartPos);
+    void do_servo_cp(void);
+    prmPositionCartesianSet servo_cp_data, servo_cp_data_previous;
+
     // Return the average period (measured by StateTable)
     void GetAveragePeriod(double &period) const
     { period = mtsTask::GetAveragePeriod(); }
@@ -207,6 +212,12 @@ protected:
     {
         ver = static_cast<int>(version);
     }
+
+    // for dVRK compatibility, to revise once crtk covers state
+    void SetDesiredState(const std::string & desiredState) {
+        mDesiredState = desiredState;
+    }
+    mtsStdString mDesiredState, mCurrentState;
 
     // Set the gravity vector
     void SetGravity(const vct3 &gravity);

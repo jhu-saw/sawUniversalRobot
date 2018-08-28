@@ -287,6 +287,10 @@ void mtsUniversalRobotScriptRT::Init(void)
     StateTable.AddData(WrenchGet, "ForceCartesianParam");
     StateTable.AddData(debug, "Debug");
 
+    // for dVRK compatibility
+    StateTable.AddData(mDesiredState, "DesiredState");
+    StateTable.AddData(mCurrentState, "CurrentState");
+
     mInterface = AddInterfaceProvided("control");
     if (mInterface) {
         // for Status, Warning and Error with mtsMessage
@@ -339,6 +343,13 @@ void mtsUniversalRobotScriptRT::Init(void)
         mInterface->AddEventVoid(ReceiveTimeoutEvent, "ReceiveTimeout");
         vctULong2 arg;
         mInterface->AddEventWrite(PacketInvalid, "PacketInvalid", arg);
+
+        // for dVRK compatibility
+        mInterface->AddCommandVoid(&mtsUniversalRobotScriptRT::StopMotion, this, "Freeze");
+        mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::servo_cp, this, "SetPositionCartesian");
+        mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::SetDesiredState, this, "SetDesiredState");
+        mInterface->AddCommandReadState(StateTable, mDesiredState, "GetDesiredState");
+        mInterface->AddCommandReadState(StateTable, mCurrentState, "GetCurrentState");
 
         // Stats
         mInterface->AddCommandReadState(StateTable, StateTable.PeriodStats,
@@ -400,6 +411,13 @@ void mtsUniversalRobotScriptRT::Run(void)
     //bool timeCheckEnabled = (ControllerTime != 0);
     bool timeCheckEnabled = false;
 
+    // set flag as not valid by default
+    JointState.SetValid(false);
+    JointStateDesired.SetValid(false);
+    CartPos.SetValid(false);
+    CartVelParam.SetValid(false);
+    WrenchGet.SetValid(false);
+
     if (UR_State == UR_NOT_CONNECTED) {
         // Try to connect
         if (mShouldBeConnected) {
@@ -430,6 +448,7 @@ void mtsUniversalRobotScriptRT::Run(void)
         SocketError();
         socket.Close();
         UR_State = UR_NOT_CONNECTED;
+        mCurrentState = "UNINITIALIZED";
         RunEvent();
         ProcessQueuedCommands();
         return;
@@ -440,6 +459,7 @@ void mtsUniversalRobotScriptRT::Run(void)
         if ((StateTable.Tic - mTimeOfLastPacket) > 10.0 * cmn_s) {
             socket.Close();
             UR_State = UR_NOT_CONNECTED;
+            mCurrentState = "UNINITIALIZED";
             mInterface->SendError(this->GetName() + ": no valid packet in past 10s, disconnecting IP: " + ipAddress);
             mTimeOfLastConnectAttempt = 0.0;
         }
@@ -523,9 +543,11 @@ void mtsUniversalRobotScriptRT::Run(void)
                 JointState.Position().Assign(JointPos);
                 JointState.Velocity().Assign(JointVel);
                 JointState.Effort().Assign(JointEffort);
+                JointState.SetValid(true);
                 JointStateDesired.Position().Assign(JointTargetPos);
                 JointStateDesired.Velocity().Assign(JointTargetVel);
                 JointStateDesired.Effort().Assign(JointTargetEffort);
+                JointStateDesired.SetValid(true);
             }
             module2 *base2 = (version <= VER_18) ? (module2 *)(&((packet_pre_3 *)buffer)->base2)
                                                  : (module2 *)(&((packet_30_31 *)buffer)->base2);
@@ -589,9 +611,13 @@ void mtsUniversalRobotScriptRT::Run(void)
                 vctDoubleRot3 cartRot(rot);  // rotation matrix, from world frame to the end-effector frame
                 vctFrm3 frm(cartRot, position);
                 CartPos.SetPosition(frm);
+                CartPos.SetValid(true);
             }
             CartVelParam.SetVelocity(TCPSpeed);
+            CartVelParam.SetValid(true);
             WrenchGet.SetForce(TCPForce);
+            WrenchGet.SetValid(true);
+            mCurrentState = "READY";
             // Finished with packet; now preserve any extra data for next time
             if (packageLength < static_cast<unsigned long>(numBytes)) {
                 memmove(buffer, buffer+packageLength, numBytes-packageLength);
@@ -618,7 +644,13 @@ void mtsUniversalRobotScriptRT::Run(void)
     // Call any connected components
     RunEvent();
 
+    servo_cp_data.SetValid(false);
+
     ProcessQueuedCommands();
+
+    if (servo_cp_data.Valid()) {
+        do_servo_cp();
+    }
 
     isMotionActive = ((UR_State == UR_POS_MOVING) || (UR_State == UR_VEL_MOVING) ||
                       (UR_State == UR_FREE_DRIVE));
@@ -715,6 +747,7 @@ void mtsUniversalRobotScriptRT::RobotNotReady(void)
 {
     RobotNotReadyEvent();
     mInterface->SendWarning(this->GetName() + ": robot not ready");
+    mCurrentState = "UNINITIALIZED";
 }
 
 void mtsUniversalRobotScriptRT::ReceiveTimeout(void)
@@ -780,12 +813,14 @@ void mtsUniversalRobotScriptRT::EnableMotorPower(void)
     if (socket.Send("power on\n") == -1)
         SocketError();
     UR_State = UR_POWERING_ON;
+    mCurrentState = "POWERING";
 }
 
 void mtsUniversalRobotScriptRT::DisableMotorPower(void)
 {
     if (socket.Send("power off\n") == -1)
         SocketError();
+    mCurrentState = "UNINITIALIZED";
 }
 
 void mtsUniversalRobotScriptRT::UnlockSecurityStop(void)
@@ -796,17 +831,20 @@ void mtsUniversalRobotScriptRT::UnlockSecurityStop(void)
         // Although not documented, it seems that sending "set unlock protective stop" via the script
         // interface works. An alternative would be to send "unlock protective stop" to the dashboard
         // server (socketDB), which is supported by Version 3.1+.
-        if (socket.Send("set unlock protective stop\n") == -1)
+        if (socket.Send("set unlock protective stop\n") == -1) {
             SocketError();
+        }
         // Although Version 3.1 introduced "close safety popup", that does not seem to close the
         // protective stop popup, whereas "close popup" works fine. Note that "close popup" is supported
         // starting with Version 1.6, but is not used for those older versions because there is no
         // benefit to closing the popup when the protective stop is still asserted.
-        if (!socketDB.Send("close popup\n"))
+        if (!socketDB.Send("close popup\n")) {
             CMN_LOG_CLASS_RUN_WARNING << "Failed to close popup" << std::endl;
+        }
     }
-    else
+    else {
         mInterface->SendWarning(this->GetName() + ": UnlockSecurityStop not supported for this firmware version");
+    }
 }
 
 void mtsUniversalRobotScriptRT::JointVelocityMove(const prmVelocityJointSet &jtvelSet)
@@ -908,6 +946,43 @@ void mtsUniversalRobotScriptRT::CartesianPositionMove(const prmPositionCartesian
     }
     else
         RobotNotReady();
+}
+
+void mtsUniversalRobotScriptRT::servo_cp(const prmPositionCartesianSet &CartPos)
+{
+    servo_cp_data = CartPos;
+    servo_cp_data.SetValid(true);
+}
+
+void mtsUniversalRobotScriptRT::do_servo_cp(void)
+{
+    char CartPosCmdString[100];
+
+    if (servo_cp_data.GetGoal().Equal(servo_cp_data_previous.GetGoal())) {
+        return;
+    }
+
+    double timeToExecute;
+    this->GetAveragePeriod(timeToExecute);
+
+    vct3 speedVector = servo_cp_data.GetGoal().Translation() - servo_cp_data_previous.GetGoal().Translation();
+
+    vctMatRot3 orientation = servo_cp_data.GetGoal().Rotation();
+    vctMatRot3 orientation_prev = servo_cp_data_previous.GetGoal().Rotation();
+    vctMatRot3 delta_orientation_wrt_tip;
+    orientation.ApplyInverseTo(orientation_prev, delta_orientation_wrt_tip);
+
+    vctMatRot3 delta_orientation_wrt_base;
+    CartPos.Position().Rotation().ApplyTo(delta_orientation_wrt_tip, delta_orientation_wrt_base);
+    vct3 angularSpeed = vctRodRot3(delta_orientation_wrt_tip);
+    angularSpeed = angularSpeed / timeToExecute;
+
+    prmVelocityCartesianSet velocity;
+    velocity.SetAngularVelocity(angularSpeed);
+    velocity.SetVelocity(speedVector / timeToExecute);
+    CartesianVelocityMove(velocity);
+
+    servo_cp_data_previous.SetGoal(servo_cp_data.GetGoal());
 }
 
 void mtsUniversalRobotScriptRT::StopMotion(void)
