@@ -948,9 +948,9 @@ void mtsUniversalRobotScriptRT::CartesianPositionMove(const prmPositionCartesian
         RobotNotReady();
 }
 
-void mtsUniversalRobotScriptRT::servo_cp(const prmPositionCartesianSet &CartPos)
+void mtsUniversalRobotScriptRT::servo_cp(const prmPositionCartesianSet &cartPos)
 {
-    servo_cp_data = CartPos;
+    servo_cp_data = cartPos;
     servo_cp_data.SetValid(true);
 }
 
@@ -958,22 +958,17 @@ void mtsUniversalRobotScriptRT::do_servo_cp(void)
 {
     char CartPosCmdString[100];
 
-    if (servo_cp_data.GetGoal().Equal(servo_cp_data_previous.GetGoal())) {
-        return;
-    }
-
     double timeToExecute;
     this->GetAveragePeriod(timeToExecute);
 
+    // vct3 speedVector = servo_cp_data.GetGoal().Translation() - CartPos.Position().Translation();
     vct3 speedVector = servo_cp_data.GetGoal().Translation() - servo_cp_data_previous.GetGoal().Translation();
 
-    vctMatRot3 orientation = servo_cp_data.GetGoal().Rotation();
-    vctMatRot3 orientation_prev = servo_cp_data_previous.GetGoal().Rotation();
-    vctMatRot3 delta_orientation_wrt_tip;
-    orientation.ApplyInverseTo(orientation_prev, delta_orientation_wrt_tip);
-
-    vctMatRot3 delta_orientation_wrt_base;
-    CartPos.Position().Rotation().ApplyTo(delta_orientation_wrt_tip, delta_orientation_wrt_base);
+    // vctMatRot3 orientation_start = CartPos.Position().Rotation(); // servo_cp_data_previous.GetGoal().Rotation();
+    vctMatRot3 orientation_start = servo_cp_data_previous.GetGoal().Rotation();
+    vctMatRot3 orientation_end = servo_cp_data.GetGoal().Rotation();
+    vctMatRot3 delta_orientation_wrt_tip = orientation_end * orientation_start.Inverse();
+    vctMatRot3 delta_orientation_wrt_base = CartPos.Position().Rotation() * delta_orientation_wrt_tip; 
     vct3 angularSpeed = vctRodRot3(delta_orientation_wrt_tip);
     angularSpeed = angularSpeed / timeToExecute;
 
