@@ -910,6 +910,13 @@ void mtsUniversalRobotScriptRT::JointPositionMove(const prmPositionJointSet &jtp
 
 void mtsUniversalRobotScriptRT::CartesianVelocityMove(const prmVelocityCartesianSet &CartVel)
 {
+    /* Using speedl(xd,a,t_min)
+       Accelerate to and move with constant tool speed
+       Parameters
+       - xd: tool speed [m/s] (spatial vector)
+       - a: tool acceleration [m/s^2]
+       - t_min: minimal time before function returns
+    */
     if ((UR_State == UR_IDLE) || (UR_State == UR_VEL_MOVING)) {
         vct3 velxyz = CartVel.GetVelocity();
         vct3 velrot = CartVel.GetAngularVelocity();
@@ -925,11 +932,11 @@ void mtsUniversalRobotScriptRT::CartesianVelocityMove(const prmVelocityCartesian
         RobotNotReady();
 }
 
-void mtsUniversalRobotScriptRT::CartesianPositionMove(const prmPositionCartesianSet &CartPos)
+void mtsUniversalRobotScriptRT::CartesianPositionMove(const prmPositionCartesianSet & cartPos)
 {
     char CartPosCmdString[100];
     if (UR_State == UR_IDLE) {
-        vctDoubleFrm3 cartFrm = CartPos.GetGoal();
+        vctDoubleFrm3 cartFrm = cartPos.GetGoal();
         vctRodriguezRotation3<double> rot;
         rot.From(cartFrm.Rotation());  // The rotation vector
         // a (acceleration) is in m/s^2 and v (velocity) is in m/s.
@@ -948,7 +955,7 @@ void mtsUniversalRobotScriptRT::CartesianPositionMove(const prmPositionCartesian
         RobotNotReady();
 }
 
-void mtsUniversalRobotScriptRT::servo_cp(const prmPositionCartesianSet &cartPos)
+void mtsUniversalRobotScriptRT::servo_cp(const prmPositionCartesianSet & cartPos)
 {
     servo_cp_data = cartPos;
     servo_cp_data.SetValid(true);
@@ -960,23 +967,24 @@ void mtsUniversalRobotScriptRT::do_servo_cp(void)
 
     double timeToExecute;
     this->GetAveragePeriod(timeToExecute);
+    // std::cerr << timeToExecute << std::endl;
+    timeToExecute = 0.1; // to slow things down
 
-    // vct3 speedVector = servo_cp_data.GetGoal().Translation() - CartPos.Position().Translation();
-    vct3 speedVector = servo_cp_data.GetGoal().Translation() - servo_cp_data_previous.GetGoal().Translation();
+    vct3 linearSpeed = (servo_cp_data.GetGoal().Translation() - CartPos.Position().Translation()) / timeToExecute;
+    // vct3 linearSpeed = (servo_cp_data.GetGoal().Translation() - servo_cp_data_previous.GetGoal().Translation()) / timeToExecute;
 
-    // vctMatRot3 orientation_start = CartPos.Position().Rotation(); // servo_cp_data_previous.GetGoal().Rotation();
-    vctMatRot3 orientation_start = servo_cp_data_previous.GetGoal().Rotation();
+    vctMatRot3 orientation_start = CartPos.Position().Rotation(); // servo_cp_data_previous.GetGoal().Rotation();
+    // vctMatRot3 orientation_start = servo_cp_data_previous.GetGoal().Rotation();
     vctMatRot3 orientation_end = servo_cp_data.GetGoal().Rotation();
-    vctMatRot3 delta_orientation_wrt_tip = orientation_end * orientation_start.Inverse();
-    vctMatRot3 delta_orientation_wrt_base = CartPos.Position().Rotation() * delta_orientation_wrt_tip; 
-    vct3 angularSpeed = vctRodRot3(delta_orientation_wrt_tip);
-    angularSpeed = angularSpeed / timeToExecute;
+    vctMatRot3 delta_orientation = orientation_end * orientation_start.Inverse();
+    vct3 angularSpeed = vctRodRot3(delta_orientation);
+    angularSpeed = angularSpeed / (timeToExecute * 5.0);
 
     prmVelocityCartesianSet velocity;
     velocity.SetAngularVelocity(angularSpeed);
-    velocity.SetVelocity(speedVector / timeToExecute);
+    velocity.SetVelocity(linearSpeed);
     CartesianVelocityMove(velocity);
-
+    VelCmdTimeout = 3;
     servo_cp_data_previous.SetGoal(servo_cp_data.GetGoal());
 }
 
