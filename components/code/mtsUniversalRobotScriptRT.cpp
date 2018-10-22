@@ -407,6 +407,22 @@ void mtsUniversalRobotScriptRT::Startup(void)
 
 void mtsUniversalRobotScriptRT::Run(void)
 {
+    ProcessQueuedEvents();
+
+    // Get latest robot data
+    if (!GetRobotData()) {
+        return;
+    }
+
+    // Call any connected components
+    RunEvent();
+
+    // Execute necessary motion commands
+    ExecuteCommands();
+}
+
+bool mtsUniversalRobotScriptRT::GetRobotData(void)
+{
     // Turn this on to enable sanity check of time difference.
     //bool timeCheckEnabled = (ControllerTime != 0);
     bool timeCheckEnabled = false;
@@ -435,7 +451,7 @@ void mtsUniversalRobotScriptRT::Run(void)
         RunEvent();
         ProcessQueuedCommands();
         this->Sleep(0.008 * cmn_s);
-        return;
+        return false;
     }
 
     // Receive a packet with timeout. We choose a timeout of 1 sec, which is much
@@ -451,7 +467,7 @@ void mtsUniversalRobotScriptRT::Run(void)
         mCurrentState = "UNINITIALIZED";
         RunEvent();
         ProcessQueuedCommands();
-        return;
+        return false;
     }
     else if (numBytes == 0) {
         buffer_idx = 0;
@@ -465,7 +481,7 @@ void mtsUniversalRobotScriptRT::Run(void)
         }
         RunEvent();
         ProcessQueuedCommands();
-        return;
+        return false;
     }
     mTimeOfLastPacket = StateTable.Tic;
 
@@ -578,6 +594,7 @@ void mtsUniversalRobotScriptRT::Run(void)
             isPowerOn = jointHasPower.All();
 
             double *tool_vec = 0;
+            double *tool_vec_target = 0;
             if (version < VER_30_31) {
                 packet_pre_3 *packet = (packet_pre_3 *)(buffer);
                 // Documentation does not specify whether tool_Vector or TCP_speed
@@ -599,6 +616,8 @@ void mtsUniversalRobotScriptRT::Run(void)
                 tool_vec = packet->tool_vec_Act;         // actual Cartesian position
                 TCPSpeed.Assign(packet->TCP_speed_Act);  // actual Cartesian velocity
                 TCPForce.Assign(packet->TCP_force);
+                tool_vec_target = packet->tool_vec_Tar;
+                SpeedScaling = packet->speed_Scal;
                 safetyMode = static_cast<int>(packet->safety_Mode+0.5);  // should always be positive
                 // Whether e-stop is pressed
                 isEStop = (safetyMode == SAFETY_MODE_ROBOT_EMERGENCY_STOP);
@@ -613,6 +632,19 @@ void mtsUniversalRobotScriptRT::Run(void)
                 CartPos.SetPosition(frm);
                 CartPos.SetValid(true);
             }
+
+            if(tool_vec_target) {
+                vct3 position(tool_vec_target);
+                vct3 orientation(tool_vec_target+3);
+
+                vctRodriguezRotation3<double> rot(orientation);
+                vctDoubleRot3 cartRot(rot);  // rotation matrix, from world frame to the end-effector frame
+                vctFrm3 frm(cartRot, position);
+                CartPosDes.SetPosition(frm);
+                CartPosDes.SetValid(true);
+
+            }
+
             CartVelParam.SetVelocity(TCPSpeed);
             CartVelParam.SetValid(true);
             WrenchGet.SetForce(TCPForce);
@@ -641,16 +673,18 @@ void mtsUniversalRobotScriptRT::Run(void)
     // the latest data.
     StateTable.Advance();
 
-    // Call any connected components
-    RunEvent();
+    return true;
+}
 
+void mtsUniversalRobotScriptRT::ExecuteCommands(void)
+{
     servo_cp_data.SetValid(false);
 
     ProcessQueuedCommands();
 
-    if (servo_cp_data.Valid()) {
-        do_servo_cp();
-    }
+//    if (servo_cp_data.Valid()) {
+//        do_servo_cp();
+//    }
 
     isMotionActive = ((UR_State == UR_POS_MOVING) || (UR_State == UR_VEL_MOVING) ||
                       (UR_State == UR_FREE_DRIVE));

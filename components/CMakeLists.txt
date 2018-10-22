@@ -91,8 +91,8 @@ if (cisst_FOUND_AS_REQUIRED)
            LIBRARY DESTINATION lib
            ARCHIVE DESTINATION lib)
 
-  install (FILES "${sawUniversalRobot_BINARY_DIR}/sawUniversalRobotConfig.cmake"
-           DESTINATION "${CISST_CMAKE_INSTALL_SUFFIX}/saw")
+  install (FILES "${sawUniversalRobot_CMAKE_CONFIG_FILE}"
+           DESTINATION "share/sawUniversalRobot")
 
 else (cisst_FOUND_AS_REQUIRED)
 

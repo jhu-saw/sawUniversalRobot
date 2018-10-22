@@ -141,6 +141,7 @@ protected:
     prmStateJoint JointState;
     prmStateJoint JointStateDesired;
 
+    prmPositionCartesianGet CartPosDes;   // Desired Cartesian position (standard payload)
     prmPositionCartesianGet CartPos;      // Actual Cartesian position (standard payload)
     vct6 TCPSpeed;                        // Actual Cartesian velocity
     prmVelocityCartesianGet CartVelParam; // Actual Cartesian velocity (standard payload)
@@ -166,6 +167,12 @@ protected:
 
     // Called by constructors
     void Init(void);
+
+    // Read robot data from tcp communication
+    virtual bool GetRobotData(void);
+
+    // Execute necessary motion commands based on robot state
+    virtual void ExecuteCommands(void);
 
     // Methods for provided interface
 
@@ -279,6 +286,7 @@ protected:
     mtsFunctionWrite PacketInvalid;
     mtsInterfaceProvided * mInterface;
 
+    double SpeedScaling;    
 public:
 
     mtsUniversalRobotScriptRT(const std::string &name, unsigned int sizeStateTable = 256, bool newThread = true);
@@ -291,7 +299,7 @@ public:
 
     void Startup(void);
 
-    void Run(void);
+    virtual void Run(void);
 
     void Cleanup(void);
 };
