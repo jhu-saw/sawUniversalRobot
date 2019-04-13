@@ -396,6 +396,15 @@ void mtsUniversalRobotScriptRT::Startup(void)
 
 void mtsUniversalRobotScriptRT::Run(void)
 {
+    // mark all data as invalid
+    JointPosParam.SetValid(false);
+    JointVelParam.SetValid(false);
+    JointState.SetValid(false);
+    JointStateDesired.SetValid(false);
+    CartPos.SetValid(false);
+    CartVelParam.SetValid(false);
+    WrenchGet.SetValid(false);
+
     // Turn this on to enable sanity check of time difference.
     //bool timeCheckEnabled = (ControllerTime != 0);
     bool timeCheckEnabled = false;
@@ -510,9 +519,11 @@ void mtsUniversalRobotScriptRT::Run(void)
                 ControllerTime = base1->time;
                 JointPos.Assign(base1->qActual);
                 JointPosParam.SetPosition(JointPos);
+                JointPosParam.SetValid(true);
                 JointTargetPos.Assign(base1->qTarget);
                 JointVel.Assign(base1->qdActual);
                 JointVelParam.SetVelocity(JointVel);
+                JointVelParam.SetValid(true);
                 JointTargetVel.Assign(base1->qdTarget);
                 // Note that efforts are actually currents; should specify torque
                 // instead of current, but UR does not provide measured torque
@@ -523,9 +534,11 @@ void mtsUniversalRobotScriptRT::Run(void)
                 JointState.Position().Assign(JointPos);
                 JointState.Velocity().Assign(JointVel);
                 JointState.Effort().Assign(JointEffort);
+                JointState.SetValid(true);
                 JointStateDesired.Position().Assign(JointTargetPos);
                 JointStateDesired.Velocity().Assign(JointTargetVel);
                 JointStateDesired.Effort().Assign(JointTargetEffort);
+                JointStateDesired.SetValid(true);
             }
             module2 *base2 = (version <= VER_18) ? (module2 *)(&((packet_pre_3 *)buffer)->base2)
                                                  : (module2 *)(&((packet_30_31 *)buffer)->base2);
@@ -589,9 +602,12 @@ void mtsUniversalRobotScriptRT::Run(void)
                 vctDoubleRot3 cartRot(rot);  // rotation matrix, from world frame to the end-effector frame
                 vctFrm3 frm(cartRot, position);
                 CartPos.SetPosition(frm);
+                CartPos.SetValid(true);
             }
             CartVelParam.SetVelocity(TCPSpeed);
+            CartVelParam.SetValid(true);
             WrenchGet.SetForce(TCPForce);
+            WrenchGet.SetValid(true);
             // Finished with packet; now preserve any extra data for next time
             if (packageLength < static_cast<unsigned long>(numBytes)) {
                 memmove(buffer, buffer+packageLength, numBytes-packageLength);
@@ -802,8 +818,9 @@ void mtsUniversalRobotScriptRT::UnlockSecurityStop(void)
         // protective stop popup, whereas "close popup" works fine. Note that "close popup" is supported
         // starting with Version 1.6, but is not used for those older versions because there is no
         // benefit to closing the popup when the protective stop is still asserted.
-        if (!socketDB.Send("close popup\n"))
+        if (!socketDB.Send("close popup\n")) {
             CMN_LOG_CLASS_RUN_WARNING << "Failed to close popup" << std::endl;
+        }
     }
     else
         mInterface->SendWarning(this->GetName() + ": UnlockSecurityStop not supported for this firmware version");
