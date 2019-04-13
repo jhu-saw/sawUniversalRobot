@@ -102,6 +102,8 @@ int main(int argc, char * argv[])
     rosBridge->AddSubscriberToCommandVoid("Component", "SetRobotRunningMode", "SetRobotRunningMode");
     rosBridge->AddSubscriberToCommandWrite<prmVelocityJointSet, sensor_msgs::JointState>
             ("Component", "JointVelocityMove", "JointVelocityMove");
+    rosBridge->AddSubscriberToCommandWrite<prmPositionJointSet, sensor_msgs::JointState>
+            ("Component", "JointPositionMove", "JointPositionMove");
     rosBridge->AddSubscriberToCommandWrite<prmVelocityCartesianSet, geometry_msgs::TwistStamped>
             ("Component", "CartesianVelocityMove", "CartesianVelocityMove");
 
