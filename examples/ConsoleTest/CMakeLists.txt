@@ -19,7 +19,7 @@ set (REQUIRED_CISST_LIBRARIES cisstCommon
                               cisstParameterTypes)
 
 # find cisst and make sure the required libraries have been compiled
-find_package (cisst 1.0.8 COMPONENTS ${REQUIRED_CISST_LIBRARIES})
+find_package (cisst 1.0.11 COMPONENTS ${REQUIRED_CISST_LIBRARIES})
 
 if (cisst_FOUND_AS_REQUIRED)
 
@@ -33,7 +33,7 @@ if (cisst_FOUND_AS_REQUIRED)
     set (LIBRARY_OUTPUT_PATH    "${CATKIN_DEVEL_PREFIX}/lib")
   endif ()
 
-  find_package (sawUniversalRobot REQUIRED)
+  find_package (sawUniversalRobot 1.1.0 REQUIRED)
   include_directories (${sawUniversalRobot_INCLUDE_DIR})
   link_directories (${sawUniversalRobot_LIBRARY_DIR})
 

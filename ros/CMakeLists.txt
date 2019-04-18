@@ -1,5 +1,5 @@
 #
-# (C) Copyright 2016 Johns Hopkins University (JHU), All Rights Reserved.
+# (C) Copyright 2016-2019 Johns Hopkins University (JHU), All Rights Reserved.
 #
 # --- begin cisst license - do not edit ---
 #
@@ -38,7 +38,7 @@ set (REQUIRED_CISST_LIBRARIES
      cisstParameterTypesQt
      cisstQt)
 
-find_package (cisst REQUIRED ${REQUIRED_CISST_LIBRARIES})
+find_package (cisst 1.0.11 REQUIRED ${REQUIRED_CISST_LIBRARIES})
 
 if (cisst_FOUND_AS_REQUIRED)
 
@@ -53,7 +53,7 @@ if (cisst_FOUND_AS_REQUIRED)
                   CATKIN_DEPENDS cisst_ros_bridge geometry_msgs roscpp std_msgs)
 
   # sawUniversalRobot has been compiled within cisst, we should find it automatically
-  find_package (sawUniversalRobot 1.0.0)
+  find_package (sawUniversalRobot 1.1.0)
 
   if (sawUniversalRobot_FOUND)
 

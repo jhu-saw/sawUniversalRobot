@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <package>
   <name>universal_robot_ros</name>
-  <version>1.0.0</version>
+  <version>1.1.0</version>
   <description>The Universal Robot cisst/SAW package</description>
 
   <maintainer email="anton.deguet@jhu.edu">Anton Deguet</maintainer>
