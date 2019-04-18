@@ -4,7 +4,7 @@
 /*
   Author(s): Peter Kazanzides, H. Tutkun Sen, Shuyang Chen
 
-  (C) Copyright 2016-2018 Johns Hopkins University (JHU), All Rights Reserved.
+  (C) Copyright 2016-2019 Johns Hopkins University (JHU), All Rights Reserved.
 
 --- begin cisst license - do not edit ---
 
@@ -244,17 +244,16 @@ void mtsUniversalRobotScriptRT::Init(void)
     JointState.Name()[3] = "wrist_1_joint";
     JointState.Name()[4] = "wrist_2_joint";
     JointState.Name()[5] = "wrist_3_joint";
+    JointState.Type().SetSize(NB_Actuators);
+    JointState.Type().SetAll(PRM_JOINT_REVOLUTE);
     JointState.Position().ForceAssign(JointPos);
     JointState.Velocity().ForceAssign(JointVel);
     JointState.Effort().ForceAssign(JointEffort);
     // Desired joint state (commanded values)
     JointStateDesired.Name().SetSize(NB_Actuators);
-    JointStateDesired.Name()[0] = "shoulder_pan_joint";
-    JointStateDesired.Name()[1] = "shoulder_lift_joint";
-    JointStateDesired.Name()[2] = "elbow_joint";
-    JointStateDesired.Name()[3] = "wrist_1_joint";
-    JointStateDesired.Name()[4] = "wrist_2_joint";
-    JointStateDesired.Name()[5] = "wrist_3_joint";
+    JointStateDesired.Name().Assign(JointState.Name());
+    JointStateDesired.Type().SetSize(NB_Actuators);
+    JointStateDesired.Type().SetAll(PRM_JOINT_REVOLUTE);
     JointStateDesired.Position().ForceAssign(JointTargetPos);
     JointStateDesired.Velocity().ForceAssign(JointTargetVel);
     JointStateDesired.Effort().ForceAssign(JointTargetEffort);

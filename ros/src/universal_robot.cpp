@@ -5,7 +5,7 @@
   Author(s):  Anton Deguet
   Created on: 2017-02-22
 
-  (C) Copyright 2017-2018 Johns Hopkins University (JHU), All Rights Reserved.
+  (C) Copyright 2017-2019 Johns Hopkins University (JHU), All Rights Reserved.
 
 --- begin cisst license - do not edit ---
 
@@ -57,6 +57,12 @@ int main(int argc, char * argv[])
     options.AddOptionOneValue("p", "ros-period",
                               "period in seconds to read all tool positions (default 0.01, 10 ms, 100Hz).  There is no point to have a period higher than the tracker component",
                               cmnCommandLineOptions::OPTIONAL_OPTION, &rosPeriod);
+
+    typedef std::list<std::string> managerConfigType;
+    managerConfigType managerConfig;
+    options.AddOptionMultipleValues("m", "component-manager",
+                                    "JSON file to configure component manager",
+                                    cmnCommandLineOptions::OPTIONAL_OPTION, &managerConfig);
 
     // check that all required options have been provided
     std::string errorMessage;
@@ -128,6 +134,7 @@ int main(int argc, char * argv[])
     // Qt Widgets
     prmStateRobotQtWidgetComponent * stateWidget
         = new prmStateRobotQtWidgetComponent("UR-State");
+    stateWidget->SetPrismaticRevoluteFactors(1.0 / cmn_mm, cmn180_PI);
     stateWidget->Configure();
     componentManager->AddComponent(stateWidget);
     componentManager->Connect(stateWidget->GetName(), "Component",
@@ -141,6 +148,24 @@ int main(int argc, char * argv[])
     componentManager->Connect(systemWidget->GetName(), "Component",
                               device->GetName(), "control");
     tabWidget->addTab(systemWidget, "System");
+
+    // custom user component
+    const managerConfigType::iterator end = managerConfig.end();
+    for (managerConfigType::iterator iter = managerConfig.begin();
+         iter != end;
+         ++iter) {
+        if (!iter->empty()) {
+            if (!cmnPath::Exists(*iter)) {
+                CMN_LOG_INIT_ERROR << "File " << *iter
+                                   << " not found!" << std::endl;
+            } else {
+                if (!componentManager->ConfigureJSON(*iter)) {
+                    CMN_LOG_INIT_ERROR << "Configure: failed to configure component-manager" << std::endl;
+                    return -1;
+                }
+            }
+        }
+    }
 
     // create and start all components
     componentManager->CreateAllAndWait(5.0 * cmn_s);
