@@ -34,6 +34,9 @@ http://www.cisst.org/cisst/license.txt.
 
 int main(int argc, char * argv[])
 {
+
+    std::cerr << CMN_LOG_DETAILS << "------------ need to create multiple ROS bridges" << std::endl;
+
     // log configuration
     cmnLogger::SetMask(CMN_LOG_ALLOW_ALL);
     cmnLogger::SetMaskFunction(CMN_LOG_ALLOW_ALL);
@@ -97,38 +100,42 @@ int main(int argc, char * argv[])
 
     // ROS publisher
     rosBridge->AddPublisherFromCommandRead<prmPositionCartesianGet, geometry_msgs::PoseStamped>
-        ("Component", "GetPositionCartesian",
-         "position_cartesian_current");
+        ("ur", "measured_cp", "measured_cp");
+    rosBridge->AddPublisherFromCommandRead<prmVelocityCartesianGet, geometry_msgs::TwistStamped>
+        ("ur", "measured_cv", "measured_cv");
+    rosBridge->AddPublisherFromCommandRead<prmForceCartesianGet, geometry_msgs::WrenchStamped>
+        ("ur", "measured_cf", "measured_cf");
 
     rosBridge->AddPublisherFromCommandRead<prmStateJoint, sensor_msgs::JointState>
-        ("Component", "GetStateJoint",
-         "joint_states");
+        ("ur", "measured_js", "measured_js");
+    rosBridge->AddPublisherFromCommandRead<prmStateJoint, sensor_msgs::JointState>
+        ("ur", "setpoint_js", "setpoint_js");
 
-    rosBridge->AddSubscriberToCommandVoid("Component", "SetRobotFreeDriveMode", "SetRobotFreeDriveMode");
-    rosBridge->AddSubscriberToCommandVoid("Component", "SetRobotRunningMode", "SetRobotRunningMode");
+    rosBridge->AddSubscriberToCommandVoid("ur", "SetRobotFreeDriveMode", "SetRobotFreeDriveMode");
+    rosBridge->AddSubscriberToCommandVoid("ur", "SetRobotRunningMode", "SetRobotRunningMode");
+
     rosBridge->AddSubscriberToCommandWrite<prmVelocityJointSet, sensor_msgs::JointState>
-            ("Component", "JointVelocityMove", "JointVelocityMove");
+            ("ur", "servo_jv", "servo_jv");
     rosBridge->AddSubscriberToCommandWrite<prmPositionJointSet, sensor_msgs::JointState>
-            ("Component", "JointPositionMove", "JointPositionMove");
+            ("ur", "move_jp", "move_jp");
     rosBridge->AddSubscriberToCommandWrite<prmVelocityCartesianSet, geometry_msgs::TwistStamped>
-            ("Component", "CartesianVelocityMove", "CartesianVelocityMove");
-
+            ("ur", "servo_cv", "servo_cv");
     rosBridge->AddSubscriberToCommandWrite<prmPositionCartesianSet, geometry_msgs::PoseStamped>
-            ("Component", "CartesianPositionMove", "CartesianPositionMove");
+            ("ur", "move_cp", "move_cp");
 
     rosBridge->AddSubscriberToCommandWrite<vctFrm3, geometry_msgs::PoseStamped>
-        ("Component", "SetToolFrame", "SetToolFrame");
+        ("ur", "SetToolFrame", "SetToolFrame");
 
-    rosBridge->AddLogFromEventWrite("Component", "Error",
+    rosBridge->AddLogFromEventWrite("ur", "Error",
                                     mtsROSEventWriteLog::ROS_LOG_ERROR);
-    rosBridge->AddLogFromEventWrite("Component", "Warning",
+    rosBridge->AddLogFromEventWrite("ur", "Warning",
                                     mtsROSEventWriteLog::ROS_LOG_WARN);
-    rosBridge->AddLogFromEventWrite("Component", "Status",
+    rosBridge->AddLogFromEventWrite("ur", "Status",
                                     mtsROSEventWriteLog::ROS_LOG_INFO);
 
     // add the bridge after all interfaces have been created
     componentManager->AddComponent(rosBridge);
-    componentManager->Connect(rosBridge->GetName(), "Component",
+    componentManager->Connect(rosBridge->GetName(), "ur",
                               device->GetName(), "control");
 
     // Qt Widgets

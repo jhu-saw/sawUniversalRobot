@@ -237,26 +237,26 @@ void mtsUniversalRobotScriptRT::Init(void)
     JointTargetEffort.SetAll(0.0);
 
     // Actual joint state (measured values)
-    JointState.Name().SetSize(NB_Actuators);
-    JointState.Name()[0] = "shoulder_pan_joint";
-    JointState.Name()[1] = "shoulder_lift_joint";
-    JointState.Name()[2] = "elbow_joint";
-    JointState.Name()[3] = "wrist_1_joint";
-    JointState.Name()[4] = "wrist_2_joint";
-    JointState.Name()[5] = "wrist_3_joint";
-    JointState.Type().SetSize(NB_Actuators);
-    JointState.Type().SetAll(PRM_JOINT_REVOLUTE);
-    JointState.Position().ForceAssign(JointPos);
-    JointState.Velocity().ForceAssign(JointVel);
-    JointState.Effort().ForceAssign(JointEffort);
+    m_measured_js.Name().SetSize(NB_Actuators);
+    m_measured_js.Name()[0] = "shoulder_pan_joint";
+    m_measured_js.Name()[1] = "shoulder_lift_joint";
+    m_measured_js.Name()[2] = "elbow_joint";
+    m_measured_js.Name()[3] = "wrist_1_joint";
+    m_measured_js.Name()[4] = "wrist_2_joint";
+    m_measured_js.Name()[5] = "wrist_3_joint";
+    m_measured_js.Type().SetSize(NB_Actuators);
+    m_measured_js.Type().SetAll(PRM_JOINT_REVOLUTE);
+    m_measured_js.Position().ForceAssign(JointPos);
+    m_measured_js.Velocity().ForceAssign(JointVel);
+    m_measured_js.Effort().ForceAssign(JointEffort);
     // Desired joint state (commanded values)
-    JointStateDesired.Name().SetSize(NB_Actuators);
-    JointStateDesired.Name().Assign(JointState.Name());
-    JointStateDesired.Type().SetSize(NB_Actuators);
-    JointStateDesired.Type().SetAll(PRM_JOINT_REVOLUTE);
-    JointStateDesired.Position().ForceAssign(JointTargetPos);
-    JointStateDesired.Velocity().ForceAssign(JointTargetVel);
-    JointStateDesired.Effort().ForceAssign(JointTargetEffort);
+    m_setpoint_js.Name().SetSize(NB_Actuators);
+    m_setpoint_js.Name().Assign(m_measured_js.Name());
+    m_setpoint_js.Type().SetSize(NB_Actuators);
+    m_setpoint_js.Type().SetAll(PRM_JOINT_REVOLUTE);
+    m_setpoint_js.Position().ForceAssign(JointTargetPos);
+    m_setpoint_js.Velocity().ForceAssign(JointTargetVel);
+    m_setpoint_js.Effort().ForceAssign(JointTargetEffort);
     TCPSpeed.SetAll(0.0);
     TCPForce.SetAll(0.0);
     jtpos.SetSize(NB_Actuators);
@@ -277,13 +277,13 @@ void mtsUniversalRobotScriptRT::Init(void)
     StateTable.AddData(JointVel, "VelocityJoint");
     StateTable.AddData(JointVelParam, "VelocityJointParam");
     StateTable.AddData(JointTargetVel, "VelocityTargetJoint");
-    StateTable.AddData(JointState, "JointState");
-    StateTable.AddData(JointStateDesired, "JointStateDesired");
-    StateTable.AddData(CartPos, "PositionCartesian");
+    StateTable.AddData(m_measured_js, "measured_js");
+    StateTable.AddData(m_setpoint_js, "setpoint_js");
+    StateTable.AddData(m_measured_cp, "measured_cp");
     StateTable.AddData(TCPSpeed, "VelocityCartesian");
-    StateTable.AddData(CartVelParam, "VelocityCartesianParam");
+    StateTable.AddData(m_measured_cv, "measured_cv");
     StateTable.AddData(TCPForce, "ForceCartesianForce");
-    StateTable.AddData(WrenchGet, "ForceCartesianParam");
+    StateTable.AddData(m_measured_cf, "measured_cf");
     StateTable.AddData(debug, "Debug");
 
     mInterface = AddInterfaceProvided("control");
@@ -296,15 +296,19 @@ void mtsUniversalRobotScriptRT::Init(void)
         mInterface->AddCommandReadState(this->StateTable, JointTargetPos, "GetPositionJointDesired");
         mInterface->AddCommandReadState(this->StateTable, JointVelParam, "GetVelocityJoint");
         mInterface->AddCommandReadState(this->StateTable, JointTargetVel, "GetVelocityJointDesired");
-        mInterface->AddCommandReadState(this->StateTable, JointState, "GetStateJoint");
-        mInterface->AddCommandReadState(this->StateTable, JointStateDesired, "GetStateJointDesired");
-        mInterface->AddCommandReadState(this->StateTable, CartPos, "GetPositionCartesian");
-        mInterface->AddCommandReadState(this->StateTable, CartVelParam, "GetVelocityCartesian");
-        mInterface->AddCommandReadState(this->StateTable, WrenchGet, "GetWrenchBody");
-        mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::JointVelocityMove, this, "JointVelocityMove");
-        mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::JointPositionMove, this, "JointPositionMove");
-        mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::CartesianPositionMove,this, "CartesianPositionMove");
-        mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::CartesianVelocityMove,this, "CartesianVelocityMove");
+        mInterface->AddCommandReadState(this->StateTable, m_measured_js, "measured_js");
+        mInterface->AddCommandReadState(this->StateTable, m_setpoint_js, "setpoint_js");
+        mInterface->AddCommandReadState(this->StateTable, m_measured_cp, "measured_cp");
+        mInterface->AddCommandReadState(this->StateTable, m_measured_cv, "measured_cv");
+        mInterface->AddCommandReadState(this->StateTable, m_measured_cf, "measured_cf");
+        mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::servo_jv,
+                                    this, "servo_jv");
+        mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::move_jp,
+                                    this, "move_jp");
+        mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::servo_cv,
+                                    this, "servo_cv");
+        mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::move_cp,
+                                    this, "move_cp");
 
         // Following are not yet standardized
         mInterface->AddCommandReadState(StateTable, ControllerTime, "GetControllerTime");
@@ -398,11 +402,11 @@ void mtsUniversalRobotScriptRT::Run(void)
     // mark all data as invalid
     JointPosParam.SetValid(false);
     JointVelParam.SetValid(false);
-    JointState.SetValid(false);
-    JointStateDesired.SetValid(false);
-    CartPos.SetValid(false);
-    CartVelParam.SetValid(false);
-    WrenchGet.SetValid(false);
+    m_measured_js.SetValid(false);
+    m_setpoint_js.SetValid(false);
+    m_measured_cp.SetValid(false);
+    m_measured_cv.SetValid(false);
+    m_measured_cf.SetValid(false);
 
     // Turn this on to enable sanity check of time difference.
     //bool timeCheckEnabled = (ControllerTime != 0);
@@ -530,14 +534,14 @@ void mtsUniversalRobotScriptRT::Run(void)
                 JointEffort.Assign(base1->I_Actual);
                 JointTargetEffort.Assign(base1->I_Target);
 
-                JointState.Position().Assign(JointPos);
-                JointState.Velocity().Assign(JointVel);
-                JointState.Effort().Assign(JointEffort);
-                JointState.SetValid(true);
-                JointStateDesired.Position().Assign(JointTargetPos);
-                JointStateDesired.Velocity().Assign(JointTargetVel);
-                JointStateDesired.Effort().Assign(JointTargetEffort);
-                JointStateDesired.SetValid(true);
+                m_measured_js.Position().Assign(JointPos);
+                m_measured_js.Velocity().Assign(JointVel);
+                m_measured_js.Effort().Assign(JointEffort);
+                m_measured_js.SetValid(true);
+                m_setpoint_js.Position().Assign(JointTargetPos);
+                m_setpoint_js.Velocity().Assign(JointTargetVel);
+                m_setpoint_js.Effort().Assign(JointTargetEffort);
+                m_setpoint_js.SetValid(true);
             }
             module2 *base2 = (version <= VER_18) ? (module2 *)(&((packet_pre_3 *)buffer)->base2)
                                                  : (module2 *)(&((packet_30_31 *)buffer)->base2);
@@ -600,23 +604,23 @@ void mtsUniversalRobotScriptRT::Run(void)
                 vctRodriguezRotation3<double> rot(orientation);
                 vctDoubleRot3 cartRot(rot);  // rotation matrix, from world frame to the end-effector frame
                 vctFrm3 frm(cartRot, position);
-                CartPos.SetPosition(frm);
-                CartPos.SetValid(true);
+                m_measured_cp.SetPosition(frm);
+                m_measured_cp.SetValid(true);
             }
-            CartVelParam.SetVelocity(TCPSpeed);
-            CartVelParam.SetValid(true);
-            WrenchGet.SetForce(TCPForce);
-            WrenchGet.SetValid(true);
+            m_measured_cv.SetVelocity(TCPSpeed);
+            m_measured_cv.SetValid(true);
+            m_measured_cf.SetForce(TCPForce);
+            m_measured_cf.SetValid(true);
             // Finished with packet; now preserve any extra data for next time
             if (packageLength < static_cast<unsigned long>(numBytes)) {
                 memmove(buffer, buffer+packageLength, numBytes-packageLength);
                 buffer_idx = numBytes-packageLength;
-            }
-            else
+            } else {
                 buffer_idx = 0;
-        }
-        else
+            }
+        } else {
             buffer_idx = 0;
+        }
     }
     else {
         buffer_idx = 0;
@@ -825,7 +829,7 @@ void mtsUniversalRobotScriptRT::UnlockSecurityStop(void)
         mInterface->SendWarning(this->GetName() + ": UnlockSecurityStop not supported for this firmware version");
 }
 
-void mtsUniversalRobotScriptRT::JointVelocityMove(const prmVelocityJointSet &jtvelSet)
+void mtsUniversalRobotScriptRT::servo_jv(const prmVelocityJointSet & jtvelSet)
 {
     if ((UR_State == UR_IDLE) || (UR_State == UR_VEL_MOVING)) {
         jtvelSet.GetGoal(jtvel);
@@ -861,12 +865,12 @@ void mtsUniversalRobotScriptRT::JointVelocityMove(const prmVelocityJointSet &jtv
         }
         VelCmdTimeout = 125;   // Number of cycles for command to remain valid (1 second)
         UR_State = UR_VEL_MOVING;
-    }
-    else
+    } else {
         RobotNotReady();
+    }
 }
 
-void mtsUniversalRobotScriptRT::JointPositionMove(const prmPositionJointSet &jtposSet)
+void mtsUniversalRobotScriptRT::move_jp(const prmPositionJointSet & jtposSet)
 {
     char JointPosCmdString[100];
     if (UR_State == UR_IDLE) {
@@ -877,20 +881,21 @@ void mtsUniversalRobotScriptRT::JointPositionMove(const prmPositionJointSet &jtp
         sprintf(JointPosCmdString,
                 "movej([%6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf], a=%6.4lf, v=%6.4lf)\n",
                 jtpos[0], jtpos[1], jtpos[2], jtpos[3], jtpos[4], jtpos[5], 1.0, 0.2);
-        if (socket.Send(JointPosCmdString) == -1)
+        if (socket.Send(JointPosCmdString) == -1) {
             SocketError();
-        else
+        } else {
             UR_State = UR_POS_MOVING;
-    }
-    else
+        }
+    } else {
         RobotNotReady();
+    }
 }
 
-void mtsUniversalRobotScriptRT::CartesianVelocityMove(const prmVelocityCartesianSet &CartVel)
+void mtsUniversalRobotScriptRT::servo_cv(const prmVelocityCartesianSet & cartVel)
 {
     if ((UR_State == UR_IDLE) || (UR_State == UR_VEL_MOVING)) {
-        vct3 velxyz = CartVel.GetVelocity();
-        vct3 velrot = CartVel.GetAngularVelocity();
+        vct3 velxyz = cartVel.GetVelocity();
+        vct3 velrot = cartVel.GetAngularVelocity();
         // speedl(qd, a, t, aRot)
         sprintf(VelCmdString,
                 "speedl([%6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf], %6.4lf, 0.1)\n",
@@ -898,16 +903,16 @@ void mtsUniversalRobotScriptRT::CartesianVelocityMove(const prmVelocityCartesian
         strcpy(VelCmdStop, "speedl([0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 1.4, 0.0)\n");
         VelCmdTimeout = 125;   // Number of cycles for command to remain valid (1 second)
         UR_State = UR_VEL_MOVING;
-    }
-    else
+    } else {
         RobotNotReady();
+    }
 }
 
-void mtsUniversalRobotScriptRT::CartesianPositionMove(const prmPositionCartesianSet &CartPos)
+void mtsUniversalRobotScriptRT::move_cp(const prmPositionCartesianSet & cartPos)
 {
     char CartPosCmdString[100];
     if (UR_State == UR_IDLE) {
-        vctDoubleFrm3 cartFrm = CartPos.GetGoal();
+        vctDoubleFrm3 cartFrm = cartPos.GetGoal();
         vctRodriguezRotation3<double> rot;
         rot.From(cartFrm.Rotation());  // The rotation vector
         // a (acceleration) is in m/s^2 and v (velocity) is in m/s.
@@ -917,13 +922,14 @@ void mtsUniversalRobotScriptRT::CartesianPositionMove(const prmPositionCartesian
             "movel(p[%6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf], a=%6.4lf, v=%6.4lf)\n",
             cartFrm.Translation().X(), cartFrm.Translation().Y(), cartFrm.Translation().Z(),
             rot.X(), rot.Y(), rot.Z(), 0.8, 0.03);
-        if (socket.Send(CartPosCmdString) == -1)
+        if (socket.Send(CartPosCmdString) == -1) {
             SocketError();
-        else
+        } else {
             UR_State = UR_POS_MOVING;
-    }
-    else
+        }
+    } else {
         RobotNotReady();
+    }
 }
 
 void mtsUniversalRobotScriptRT::StopMotion(void)

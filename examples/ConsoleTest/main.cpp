@@ -2,7 +2,7 @@
 /*ex: set filetype=cpp softtabstop=4 shiftwidth=4 tabstop=4 cindent expandtab:*/
 
 /*
-(C) Copyright 2016-2018 Johns Hopkins University (JHU), All Rights Reserved.
+(C) Copyright 2016-2019 Johns Hopkins University (JHU), All Rights Reserved.
 
 --- begin cisst license - do not edit ---
 
@@ -44,10 +44,10 @@ private:
     mtsFunctionRead GetConnected;
     mtsFunctionRead GetVersion;
     mtsFunctionRead GetAveragePeriod;
-    mtsFunctionWrite PositionMoveJoint;
-    mtsFunctionWrite PositionMoveCartesian;
-    mtsFunctionWrite VelocityMoveJoint;
-    mtsFunctionWrite VelocityMoveCartesian;
+    mtsFunctionWrite move_jp;
+    mtsFunctionWrite move_cp;
+    mtsFunctionWrite servo_jv;
+    mtsFunctionWrite servo_cp;
     mtsFunctionRead GetDebug;
     mtsFunctionWrite SetPayload;
     mtsFunctionWrite SetToolVoltage;
@@ -105,10 +105,10 @@ public:
             req->AddFunction("GetPositionCartesian", GetPositionCartesian);
             req->AddFunction("GetConnected", GetConnected);
             req->AddFunction("GetAveragePeriod", GetAveragePeriod);
-            req->AddFunction("JointPositionMove", PositionMoveJoint);
-            req->AddFunction("CartesianPositionMove", PositionMoveCartesian);
-            req->AddFunction("JointVelocityMove", VelocityMoveJoint);
-            req->AddFunction("CartesianVelocityMove", VelocityMoveCartesian);
+            req->AddFunction("move_jp", move_jp);
+            req->AddFunction("move_cp", move_cp);
+            req->AddFunction("servo_jv", servo_jv);
+            req->AddFunction("servo_cv", servo_cp);
             req->AddFunction("GetDebug", GetDebug);
             req->AddFunction("SetPayload", SetPayload);
             req->AddFunction("SetToolVoltage", SetToolVoltage);
@@ -212,7 +212,7 @@ public:
                     std::cin >> jtgoal[0] >> jtgoal[1] >> jtgoal[2] >> jtgoal[3] >> jtgoal[4] >> jtgoal[5];
                     jtgoal.Multiply(cmnPI_180);
                     jtposSet.SetGoal(jtgoal);
-                    PositionMoveJoint(jtposSet);
+                    move_jp(jtposSet);
                     break;
 
                 case 'M':   // position move Cartesian
@@ -229,7 +229,7 @@ public:
                     else
                         cartRot.Assign(cartpos.Position().Rotation());
                     cartposSet.SetGoal(cartRot);
-                    PositionMoveCartesian(cartposSet);
+                    move_cp(cartposSet);
                     break;
 
                 case 'v':   // velocity move joint
@@ -237,7 +237,7 @@ public:
                     std::cin >> jtvel[0] >> jtvel[1] >> jtvel[2] >> jtvel[3] >> jtvel[4] >> jtvel[5];
                     jtvel.Multiply(cmnPI_180);
                     jtvelSet.SetGoal(jtvel);
-                    VelocityMoveJoint(jtvelSet);
+                    servo_jv(jtvelSet);
                     break;
 
                 case 'V':  // velocity move Cartesian
@@ -249,7 +249,7 @@ public:
                     velrot.Multiply(cmnPI_180);
                     cartVelSet.SetTranslationGoal(velxyz);
                     cartVelSet.SetRotationGoal(velrot);
-                    VelocityMoveCartesian(cartVelSet);
+                    servo_cp(cartVelSet);
                     break;
 
                 case 'd':  // display debug data

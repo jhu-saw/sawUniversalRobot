@@ -4,7 +4,7 @@
 /*
   Author(s): Peter Kazanzides, H. Tutkun Sen, Shuyang Chen
 
-  (C) Copyright 2016-2018 Johns Hopkins University (JHU), All Rights Reserved.
+  (C) Copyright 2016-2019 Johns Hopkins University (JHU), All Rights Reserved.
 
 --- begin cisst license - do not edit ---
 
@@ -138,15 +138,14 @@ protected:
     vctDoubleVec JointEffort;             // Actual joint current
     vctDoubleVec JointTargetEffort;       // Desired joint current
 
-    prmStateJoint JointState;
-    prmStateJoint JointStateDesired;
+    prmStateJoint m_measured_js, m_setpoint_js;
 
-    prmPositionCartesianGet CartPos;      // Actual Cartesian position (standard payload)
-    vct6 TCPSpeed;                        // Actual Cartesian velocity
-    prmVelocityCartesianGet CartVelParam; // Actual Cartesian velocity (standard payload)
+    prmPositionCartesianGet m_measured_cp; // Actual Cartesian position (standard payload)
+    vct6 TCPSpeed;                         // Actual Cartesian velocity
+    prmVelocityCartesianGet m_measured_cv; // Actual Cartesian velocity (standard payload)
 
-    vct6 TCPForce;                        // Actual Cartesian force/torque
-    prmForceCartesianGet WrenchGet;       // Actual Cartesian force/torque (standard payload)
+    vct6 TCPForce;                         // Actual Cartesian force/torque
+    prmForceCartesianGet m_measured_cf;    // Actual Cartesian force/torque (standard payload)
 
     // Internal use
     vctDoubleVec jtpos;
@@ -185,16 +184,16 @@ protected:
     void StopMotion(void);
 
     // Move joint at specified velocity (radians/sec)
-    void JointVelocityMove(const prmVelocityJointSet &jtvel);
+    void servo_jv(const prmVelocityJointSet & jtvel);
 
     // Move joint to specified position (radians)
-    void JointPositionMove(const prmPositionJointSet &jtpos);
+    void move_jp(const prmPositionJointSet & jtpos);
 
     // Cartesian velocity move
-    void CartesianVelocityMove(const prmVelocityCartesianSet &cartVel);
+    void servo_cv(const prmVelocityCartesianSet & cartVel);
 
     // Cartesian position move
-    void CartesianPositionMove(const prmPositionCartesianSet &cartPos);
+    void move_cp(const prmPositionCartesianSet & cartPos);
 
     // Return the average period (measured by StateTable)
     void GetAveragePeriod(double &period) const
