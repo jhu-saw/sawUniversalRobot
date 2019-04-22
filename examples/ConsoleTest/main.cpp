@@ -28,8 +28,8 @@ http://www.cisst.org/cisst/license.txt.
 class UniversalRobotClient : public mtsTaskMain {
 
 private:
-    prmPositionJointGet jtpos;
-    prmPositionCartesianGet cartpos;
+    prmStateJoint m_measured_js;
+    prmPositionCartesianGet m_measured_cp;
     vctDoubleVec jtgoal, jtvel;
     prmPositionJointSet jtposSet;
     prmPositionCartesianSet cartposSet;
@@ -39,8 +39,8 @@ private:
 
     mtsFunctionRead GetControllerTime;
     mtsFunctionRead GetControllerExecTime;
-    mtsFunctionRead GetPositionJoint;
-    mtsFunctionRead GetPositionCartesian;
+    mtsFunctionRead measured_js;
+    mtsFunctionRead measured_cp;
     mtsFunctionRead GetConnected;
     mtsFunctionRead GetVersion;
     mtsFunctionRead GetAveragePeriod;
@@ -94,15 +94,16 @@ private:
 public:
 
     UniversalRobotClient() : mtsTaskMain("UniversalRobotClient"),
-                             jtpos(6), jtgoal(6), jtvel(6), jtposSet(6), jtvelSet(6),
+                             jtgoal(6), jtvel(6), jtposSet(6), jtvelSet(6),
                              debugMode(false)
     {
+        m_measured_js.SetSize(6);
         mtsInterfaceRequired *req = AddInterfaceRequired("Input", MTS_OPTIONAL);
         if (req) {
             req->AddFunction("GetControllerTime", GetControllerTime);
             req->AddFunction("GetControllerExecTime", GetControllerExecTime);
-            req->AddFunction("GetPositionJoint", GetPositionJoint);
-            req->AddFunction("GetPositionCartesian", GetPositionCartesian);
+            req->AddFunction("measured_js", measured_js);
+            req->AddFunction("measured_cp", measured_cp);
             req->AddFunction("GetConnected", GetConnected);
             req->AddFunction("GetAveragePeriod", GetAveragePeriod);
             req->AddFunction("move_jp", move_jp);
@@ -192,8 +193,8 @@ public:
         GetDebug(debug);
         GetControllerTime(cTime);
         GetControllerExecTime(cExecTime);
-        GetPositionJoint(jtpos);
-        GetPositionCartesian(cartpos);
+        measured_js(m_measured_js);
+        measured_cp(m_measured_cp);
         GetConnected(connected);
         GetAveragePeriod(period);
 
@@ -226,8 +227,9 @@ public:
                         vctRodriguezRotation3<double> rot(cartVec);
                         cartRot.From(rot);
                     }
-                    else
-                        cartRot.Assign(cartpos.Position().Rotation());
+                    else {
+                        cartRot.Assign(m_measured_cp.Position().Rotation());
+                    }
                     cartposSet.SetGoal(cartRot);
                     move_cp(cartposSet);
                     break;
@@ -349,7 +351,7 @@ public:
                 }
             }
 
-            vctDoubleVec jtposDeg(jtpos.Position());
+            vctDoubleVec jtposDeg(m_measured_js.Position());
             jtposDeg.Multiply(cmn180_PI);
             if (debugMode)
                printf("DEBUG: [%6.1lf,%6.1lf,%6.1lf,%6.1lf,%6.1lf,%6.1lf]                           \r",
