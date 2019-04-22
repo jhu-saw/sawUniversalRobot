@@ -34,9 +34,6 @@ http://www.cisst.org/cisst/license.txt.
 
 int main(int argc, char * argv[])
 {
-
-    std::cerr << CMN_LOG_DETAILS << "------------ need to create multiple ROS bridges" << std::endl;
-
     // log configuration
     cmnLogger::SetMask(CMN_LOG_ALLOW_ALL);
     cmnLogger::SetMaskFunction(CMN_LOG_ALLOW_ALL);
@@ -87,7 +84,10 @@ int main(int argc, char * argv[])
     componentManager->AddComponent(device);
 
     // ROS bridge
-    mtsROSBridge * rosBridge = new mtsROSBridge("URBridge", rosPeriod, true, false); // spin, don't catch sigint
+    // don't spin, don't catch sigint
+    mtsROSBridge * rosPeriodic = new mtsROSBridge("URPub", rosPeriod, false, false);
+    // spin at very high rate
+    mtsROSBridge * rosSpin = new mtsROSBridge("URSpin", 0.1 * cmn_ms, true, false);
 
     // create a Qt user interface
     QApplication application(argc, argv);
@@ -99,43 +99,47 @@ int main(int argc, char * argv[])
     // configure all components
 
     // ROS publisher
-    rosBridge->AddPublisherFromCommandRead<prmPositionCartesianGet, geometry_msgs::PoseStamped>
+    rosPeriodic->AddPublisherFromCommandRead<prmPositionCartesianGet, geometry_msgs::PoseStamped>
         ("ur", "measured_cp", "measured_cp");
-    rosBridge->AddPublisherFromCommandRead<prmVelocityCartesianGet, geometry_msgs::TwistStamped>
+    rosPeriodic->AddPublisherFromCommandRead<prmVelocityCartesianGet, geometry_msgs::TwistStamped>
         ("ur", "measured_cv", "measured_cv");
-    rosBridge->AddPublisherFromCommandRead<prmForceCartesianGet, geometry_msgs::WrenchStamped>
+    rosPeriodic->AddPublisherFromCommandRead<prmForceCartesianGet, geometry_msgs::WrenchStamped>
         ("ur", "measured_cf", "measured_cf");
 
-    rosBridge->AddPublisherFromCommandRead<prmStateJoint, sensor_msgs::JointState>
+    rosPeriodic->AddPublisherFromCommandRead<prmStateJoint, sensor_msgs::JointState>
         ("ur", "measured_js", "measured_js");
-    rosBridge->AddPublisherFromCommandRead<prmStateJoint, sensor_msgs::JointState>
+    rosPeriodic->AddPublisherFromCommandRead<prmStateJoint, sensor_msgs::JointState>
         ("ur", "setpoint_js", "setpoint_js");
 
-    rosBridge->AddSubscriberToCommandVoid("ur", "SetRobotFreeDriveMode", "SetRobotFreeDriveMode");
-    rosBridge->AddSubscriberToCommandVoid("ur", "SetRobotRunningMode", "SetRobotRunningMode");
-
-    rosBridge->AddSubscriberToCommandWrite<prmVelocityJointSet, sensor_msgs::JointState>
-            ("ur", "servo_jv", "servo_jv");
-    rosBridge->AddSubscriberToCommandWrite<prmPositionJointSet, sensor_msgs::JointState>
-            ("ur", "move_jp", "move_jp");
-    rosBridge->AddSubscriberToCommandWrite<prmVelocityCartesianSet, geometry_msgs::TwistStamped>
-            ("ur", "servo_cv", "servo_cv");
-    rosBridge->AddSubscriberToCommandWrite<prmPositionCartesianSet, geometry_msgs::PoseStamped>
-            ("ur", "move_cp", "move_cp");
-
-    rosBridge->AddSubscriberToCommandWrite<vctFrm3, geometry_msgs::PoseStamped>
+    // ROS subscribers
+    rosSpin->AddSubscriberToCommandVoid("ur", "SetRobotFreeDriveMode", "SetRobotFreeDriveMode");
+    rosSpin->AddSubscriberToCommandVoid("ur", "SetRobotRunningMode", "SetRobotRunningMode");
+    rosSpin->AddSubscriberToCommandWrite<vctFrm3, geometry_msgs::PoseStamped>
         ("ur", "SetToolFrame", "SetToolFrame");
 
-    rosBridge->AddLogFromEventWrite("ur", "Error",
-                                    mtsROSEventWriteLog::ROS_LOG_ERROR);
-    rosBridge->AddLogFromEventWrite("ur", "Warning",
+    rosSpin->AddSubscriberToCommandWrite<prmVelocityJointSet, sensor_msgs::JointState>
+        ("ur", "servo_jv", "servo_jv");
+    rosSpin->AddSubscriberToCommandWrite<prmPositionJointSet, sensor_msgs::JointState>
+        ("ur", "move_jp", "move_jp");
+    rosSpin->AddSubscriberToCommandWrite<prmVelocityCartesianSet, geometry_msgs::TwistStamped>
+        ("ur", "servo_cv", "servo_cv");
+    rosSpin->AddSubscriberToCommandWrite<prmPositionCartesianSet, geometry_msgs::PoseStamped>
+        ("ur", "move_cp", "move_cp");
+
+    // events can be published by spin bridge/thread
+    rosSpin->AddLogFromEventWrite("ur", "Error",
+                                  mtsROSEventWriteLog::ROS_LOG_ERROR);
+    rosSpin->AddLogFromEventWrite("ur", "Warning",
                                     mtsROSEventWriteLog::ROS_LOG_WARN);
-    rosBridge->AddLogFromEventWrite("ur", "Status",
-                                    mtsROSEventWriteLog::ROS_LOG_INFO);
+    rosSpin->AddLogFromEventWrite("ur", "Status",
+                                  mtsROSEventWriteLog::ROS_LOG_INFO);
 
     // add the bridge after all interfaces have been created
-    componentManager->AddComponent(rosBridge);
-    componentManager->Connect(rosBridge->GetName(), "ur",
+    componentManager->AddComponent(rosPeriodic);
+    componentManager->Connect(rosPeriodic->GetName(), "ur",
+                              device->GetName(), "control");
+    componentManager->AddComponent(rosSpin);
+    componentManager->Connect(rosSpin->GetName(), "ur",
                               device->GetName(), "control");
 
     // Qt Widgets
