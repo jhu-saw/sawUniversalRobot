@@ -221,20 +221,7 @@ void mtsUniversalRobotScriptRT::Init(void)
     isEStop = false;
     isSecurityStop = false;
     isMotionActive = false;
-    JointPos.SetSize(NB_Actuators);
-    JointPos.SetAll(0.0);
-    JointPosParam.SetSize(NB_Actuators);
-    JointTargetPos.SetSize(NB_Actuators);
-    JointTargetPos.SetAll(0.0);
-    JointVel.SetSize(NB_Actuators);
-    JointVel.SetAll(0.0);
-    JointVelParam.SetSize(NB_Actuators);
-    JointTargetVel.SetSize(NB_Actuators);
-    JointTargetVel.SetAll(0.0);
-    JointEffort.SetSize(NB_Actuators);
-    JointEffort.SetAll(0.0);
-    JointTargetEffort.SetSize(NB_Actuators);
-    JointTargetEffort.SetAll(0.0);
+
 
     // Actual joint state (measured values)
     m_measured_js.Name().SetSize(NB_Actuators);
@@ -244,19 +231,17 @@ void mtsUniversalRobotScriptRT::Init(void)
     m_measured_js.Name()[3] = "wrist_1_joint";
     m_measured_js.Name()[4] = "wrist_2_joint";
     m_measured_js.Name()[5] = "wrist_3_joint";
-    m_measured_js.Type().SetSize(NB_Actuators);
-    m_measured_js.Type().SetAll(PRM_JOINT_REVOLUTE);
-    m_measured_js.Position().ForceAssign(JointPos);
-    m_measured_js.Velocity().ForceAssign(JointVel);
-    m_measured_js.Effort().ForceAssign(JointEffort);
+    m_measured_js.Type().SetSize(NB_Actuators, PRM_JOINT_REVOLUTE);
+    m_measured_js.Position().SetSize(NB_Actuators, 0.0);
+    m_measured_js.Velocity().SetSize(NB_Actuators, 0.0);
+    m_measured_js.Effort().SetSize(NB_Actuators, 0.0);
     // Desired joint state (commanded values)
-    m_setpoint_js.Name().SetSize(NB_Actuators);
-    m_setpoint_js.Name().Assign(m_measured_js.Name());
-    m_setpoint_js.Type().SetSize(NB_Actuators);
-    m_setpoint_js.Type().SetAll(PRM_JOINT_REVOLUTE);
-    m_setpoint_js.Position().ForceAssign(JointTargetPos);
-    m_setpoint_js.Velocity().ForceAssign(JointTargetVel);
-    m_setpoint_js.Effort().ForceAssign(JointTargetEffort);
+    m_setpoint_js.Name().ForceAssign(m_measured_js.Name());
+    m_setpoint_js.Type().ForceAssign(m_measured_js.Type());
+    m_setpoint_js.Position().ForceAssign(m_measured_js.Position());
+    m_setpoint_js.Velocity().ForceAssign(m_measured_js.Velocity());
+    m_setpoint_js.Effort().ForceAssign(m_measured_js.Effort());
+    // cartesian data
     TCPSpeed.SetAll(0.0);
     TCPForce.SetAll(0.0);
     jtpos.SetSize(NB_Actuators);
@@ -271,12 +256,6 @@ void mtsUniversalRobotScriptRT::Init(void)
     StateTable.AddData(isEStop, "IsEStop");
     StateTable.AddData(isSecurityStop, "IsSecurityStop");
     StateTable.AddData(isMotionActive, "IsMotionActive");
-    StateTable.AddData(JointPos, "PositionJoint");
-    StateTable.AddData(JointPosParam, "PositionJointParam");
-    StateTable.AddData(JointTargetPos, "PositionTargetJoint");
-    StateTable.AddData(JointVel, "VelocityJoint");
-    StateTable.AddData(JointVelParam, "VelocityJointParam");
-    StateTable.AddData(JointTargetVel, "VelocityTargetJoint");
     StateTable.AddData(m_measured_js, "measured_js");
     StateTable.AddData(m_setpoint_js, "setpoint_js");
     StateTable.AddData(m_measured_cp, "measured_cp");
@@ -292,10 +271,6 @@ void mtsUniversalRobotScriptRT::Init(void)
         mInterface->AddMessageEvents();
 
         // Standard interfaces (same as dVRK)
-        mInterface->AddCommandReadState(this->StateTable, JointPosParam, "GetPositionJoint");
-        mInterface->AddCommandReadState(this->StateTable, JointTargetPos, "GetPositionJointDesired");
-        mInterface->AddCommandReadState(this->StateTable, JointVelParam, "GetVelocityJoint");
-        mInterface->AddCommandReadState(this->StateTable, JointTargetVel, "GetVelocityJointDesired");
         mInterface->AddCommandReadState(this->StateTable, m_measured_js, "measured_js");
         mInterface->AddCommandReadState(this->StateTable, m_setpoint_js, "setpoint_js");
         mInterface->AddCommandReadState(this->StateTable, m_measured_cp, "measured_cp");
@@ -399,9 +374,6 @@ void mtsUniversalRobotScriptRT::Startup(void)
 
 void mtsUniversalRobotScriptRT::Run(void)
 {
-    // mark all data as invalid
-    JointPosParam.SetValid(false);
-    JointVelParam.SetValid(false);
     m_measured_js.SetValid(false);
     m_setpoint_js.SetValid(false);
     m_measured_cp.SetValid(false);
@@ -520,27 +492,17 @@ void mtsUniversalRobotScriptRT::Run(void)
             }
             else {
                 ControllerTime = base1->time;
-                JointPos.Assign(base1->qActual);
-                JointPosParam.SetPosition(JointPos);
-                JointPosParam.SetValid(true);
-                JointTargetPos.Assign(base1->qTarget);
-                JointVel.Assign(base1->qdActual);
-                JointVelParam.SetVelocity(JointVel);
-                JointVelParam.SetValid(true);
-                JointTargetVel.Assign(base1->qdTarget);
+                m_measured_js.Position().Assign(base1->qActual);
+                m_setpoint_js.Position().Assign(base1->qTarget);
+                m_measured_js.Velocity().Assign(base1->qdActual);
+                m_setpoint_js.Velocity().Assign(base1->qdTarget);
                 // Note that efforts are actually currents; should specify torque
                 // instead of current, but UR does not provide measured torque
                 // (i.e., provides I_Actual, I_Target, and M_Target, but not M_Actual).
-                JointEffort.Assign(base1->I_Actual);
-                JointTargetEffort.Assign(base1->I_Target);
+                m_measured_js.Effort().Assign(base1->I_Actual);
+                m_setpoint_js.Effort().Assign(base1->I_Target);
 
-                m_measured_js.Position().Assign(JointPos);
-                m_measured_js.Velocity().Assign(JointVel);
-                m_measured_js.Effort().Assign(JointEffort);
                 m_measured_js.SetValid(true);
-                m_setpoint_js.Position().Assign(JointTargetPos);
-                m_setpoint_js.Velocity().Assign(JointTargetVel);
-                m_setpoint_js.Effort().Assign(JointTargetEffort);
                 m_setpoint_js.SetValid(true);
             }
             module2 *base2 = (version <= VER_18) ? (module2 *)(&((packet_pre_3 *)buffer)->base2)
@@ -677,7 +639,7 @@ void mtsUniversalRobotScriptRT::Run(void)
 
     case UR_POS_MOVING:
         // Motion is finished when target velocity is 0 or power is off
-        if ((!JointTargetVel.Any()) || (!isPowerOn))
+        if ((!m_setpoint_js.Velocity().Any()) || (!isPowerOn))
             UR_State = UR_IDLE;
         break;
 

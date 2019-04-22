@@ -21,13 +21,13 @@ http://www.cisst.org/cisst/license.txt.
 #include <cisstVector/vctTypes.h>
 #include <cisstOSAbstraction/osaSocket.h>
 #include <cisstMultiTask/mtsTaskContinuous.h>
+
 #include <cisstParameterTypes/prmStateJoint.h>
-#include <cisstParameterTypes/prmPositionJointGet.h>
 #include <cisstParameterTypes/prmPositionJointSet.h>
+#include <cisstParameterTypes/prmVelocityJointSet.h>
+
 #include <cisstParameterTypes/prmPositionCartesianGet.h>
 #include <cisstParameterTypes/prmPositionCartesianSet.h>
-#include <cisstParameterTypes/prmVelocityJointGet.h>
-#include <cisstParameterTypes/prmVelocityJointSet.h>
 #include <cisstParameterTypes/prmVelocityCartesianGet.h>
 #include <cisstParameterTypes/prmVelocityCartesianSet.h>
 #include <cisstParameterTypes/prmForceCartesianGet.h>
@@ -126,17 +126,6 @@ protected:
     bool isEStop;
     bool isSecurityStop;
     bool isMotionActive;
-
-    vctDoubleVec JointPos;                // Actual joint position
-    prmPositionJointGet JointPosParam;    // Actual joint position (standard payload)
-    vctDoubleVec JointTargetPos;          // Desired joint position (feedback)
-
-    vctDoubleVec JointVel;                // Actual joint velocity
-    prmVelocityJointGet JointVelParam;    // Actual joint velocity (standard payload)
-    vctDoubleVec JointTargetVel;          // Desired joint velocity (feedback)
-
-    vctDoubleVec JointEffort;             // Actual joint current
-    vctDoubleVec JointTargetEffort;       // Desired joint current
 
     prmStateJoint m_measured_js, m_setpoint_js;
 
