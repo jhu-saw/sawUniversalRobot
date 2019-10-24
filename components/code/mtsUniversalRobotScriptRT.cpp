@@ -19,6 +19,7 @@ http://www.cisst.org/cisst/license.txt.
 #include <stdlib.h>
 
 #include <cisstCommon/cmnPortability.h>
+#include <cisstCommon/cmnUnits.h>
 
 #if (CISST_OS == CISST_WINDOWS)
 typedef unsigned __int32 uint32_t;
