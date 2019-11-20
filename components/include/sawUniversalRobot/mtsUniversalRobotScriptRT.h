@@ -4,7 +4,7 @@
 /*
   Author(s): Peter Kazanzides, H. Tutkun Sen, Shuyang Chen
 
-  (C) Copyright 2016-2018 Johns Hopkins University (JHU), All Rights Reserved.
+  (C) Copyright 2016-2019 Johns Hopkins University (JHU), All Rights Reserved.
 
 --- begin cisst license - do not edit ---
 
@@ -22,6 +22,7 @@ http://www.cisst.org/cisst/license.txt.
 #include <cisstOSAbstraction/osaSocket.h>
 #include <cisstMultiTask/mtsTaskContinuous.h>
 #include <cisstParameterTypes/prmStateJoint.h>
+#include <cisstParameterTypes/prmConfigurationJoint.h>
 #include <cisstParameterTypes/prmPositionJointGet.h>
 #include <cisstParameterTypes/prmPositionJointSet.h>
 #include <cisstParameterTypes/prmPositionCartesianGet.h>
@@ -102,6 +103,8 @@ protected:
     enum UR_STATES { UR_NOT_CONNECTED, UR_IDLE, UR_POS_MOVING, UR_VEL_MOVING, UR_FREE_DRIVE, UR_POWERING_OFF, UR_POWERING_ON };
     UR_STATES UR_State;
 
+    mtsStateTable ConfigurationStateTable;
+
     // This buffer must be large enough for largest packet size.
     // According to documentation, port 30003 packets are up to 1060 bytes (Version 3.2)
     // (On port 30001, have seen packets as large as 1295 bytes).
@@ -138,6 +141,7 @@ protected:
     vctDoubleVec JointEffort;             // Actual joint current
     vctDoubleVec JointTargetEffort;       // Desired joint current
 
+    prmConfigurationJoint JointConfiguration;
     prmStateJoint JointState;
     prmStateJoint JointStateDesired;
 

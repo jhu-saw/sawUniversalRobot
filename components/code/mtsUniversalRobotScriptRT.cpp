@@ -189,13 +189,17 @@ std::string mtsUniversalRobotScriptRT::SafetyModeName(int mode)
 
 // Constructor
 mtsUniversalRobotScriptRT::mtsUniversalRobotScriptRT(const std::string &name, unsigned int sizeStateTable, bool newThread) :
-    mtsTaskContinuous(name, sizeStateTable, newThread), buffer_idx(0), version(VER_UNKNOWN)
+    mtsTaskContinuous(name, sizeStateTable, newThread),
+    ConfigurationStateTable(100, "Configuration"),
+    buffer_idx(0), version(VER_UNKNOWN)
 {
     Init();
 }
 
 mtsUniversalRobotScriptRT::mtsUniversalRobotScriptRT(const mtsTaskContinuousConstructorArg &arg) :
-    mtsTaskContinuous(arg), buffer_idx(0), version(VER_UNKNOWN)
+    mtsTaskContinuous(arg),
+    ConfigurationStateTable(100, "Configuration"),
+    buffer_idx(0), version(VER_UNKNOWN)
 {
     Init();
 }
@@ -237,24 +241,24 @@ void mtsUniversalRobotScriptRT::Init(void)
     JointTargetEffort.SetSize(NB_Actuators);
     JointTargetEffort.SetAll(0.0);
 
+    // Joint Configuration
+    JointConfiguration.Name().SetSize(NB_Actuators);
+    JointConfiguration.Name().at(0) = "shoulder_pan_joint";
+    JointConfiguration.Name().at(1) = "shoulder_lift_joint";
+    JointConfiguration.Name().at(2) = "elbow_joint";
+    JointConfiguration.Name().at(3) = "wrist_1_joint";
+    JointConfiguration.Name().at(4) = "wrist_2_joint";
+    JointConfiguration.Name().at(5) = "wrist_3_joint";
+    JointConfiguration.Type().SetSize(NB_Actuators);
+    JointConfiguration.Type().SetAll(PRM_JOINT_REVOLUTE);
+
     // Actual joint state (measured values)
-    JointState.Name().SetSize(NB_Actuators);
-    JointState.Name()[0] = "shoulder_pan_joint";
-    JointState.Name()[1] = "shoulder_lift_joint";
-    JointState.Name()[2] = "elbow_joint";
-    JointState.Name()[3] = "wrist_1_joint";
-    JointState.Name()[4] = "wrist_2_joint";
-    JointState.Name()[5] = "wrist_3_joint";
-    JointState.Type().SetSize(NB_Actuators);
-    JointState.Type().SetAll(PRM_JOINT_REVOLUTE);
+    JointState.Name().ForceAssign(JointConfiguration.Name());
     JointState.Position().ForceAssign(JointPos);
     JointState.Velocity().ForceAssign(JointVel);
     JointState.Effort().ForceAssign(JointEffort);
     // Desired joint state (commanded values)
-    JointStateDesired.Name().SetSize(NB_Actuators);
-    JointStateDesired.Name().Assign(JointState.Name());
-    JointStateDesired.Type().SetSize(NB_Actuators);
-    JointStateDesired.Type().SetAll(PRM_JOINT_REVOLUTE);
+    JointStateDesired.Name().ForceAssign(JointConfiguration.Name());
     JointStateDesired.Position().ForceAssign(JointTargetPos);
     JointStateDesired.Velocity().ForceAssign(JointTargetVel);
     JointStateDesired.Effort().ForceAssign(JointTargetEffort);
@@ -263,6 +267,8 @@ void mtsUniversalRobotScriptRT::Init(void)
     jtpos.SetSize(NB_Actuators);
     jtvel.SetSize(NB_Actuators);
     debug.SetAll(0.0);
+
+    // Populate state tables
     StateTable.AddData(ControllerTime, "ControllerTime");
     StateTable.AddData(ControllerExecTime, "ControllerExecTime");
     StateTable.AddData(robotMode, "RobotMode");
@@ -287,6 +293,12 @@ void mtsUniversalRobotScriptRT::Init(void)
     StateTable.AddData(WrenchGet, "ForceCartesianParam");
     StateTable.AddData(debug, "Debug");
 
+    AddStateTable(&ConfigurationStateTable);
+    ConfigurationStateTable.SetAutomaticAdvance(false);
+    ConfigurationStateTable.Start();
+    ConfigurationStateTable.Advance();
+    ConfigurationStateTable.AddData(JointConfiguration, "JointConfiguration");
+
     mInterface = AddInterfaceProvided("control");
     if (mInterface) {
         // for Status, Warning and Error with mtsMessage
@@ -297,6 +309,7 @@ void mtsUniversalRobotScriptRT::Init(void)
         mInterface->AddCommandReadState(this->StateTable, JointTargetPos, "GetPositionJointDesired");
         mInterface->AddCommandReadState(this->StateTable, JointVelParam, "GetVelocityJoint");
         mInterface->AddCommandReadState(this->StateTable, JointTargetVel, "GetVelocityJointDesired");
+        mInterface->AddCommandReadState(this->ConfigurationStateTable, JointConfiguration, "GetConfigurationJoint");
         mInterface->AddCommandReadState(this->StateTable, JointState, "GetStateJoint");
         mInterface->AddCommandReadState(this->StateTable, JointStateDesired, "GetStateJointDesired");
         mInterface->AddCommandReadState(this->StateTable, CartPos, "GetPositionCartesian");
