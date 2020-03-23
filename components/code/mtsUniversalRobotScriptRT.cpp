@@ -4,7 +4,7 @@
 /*
   Author(s): Peter Kazanzides, H. Tutkun Sen, Shuyang Chen
 
-  (C) Copyright 2016-2019 Johns Hopkins University (JHU), All Rights Reserved.
+  (C) Copyright 2016-2020 Johns Hopkins University (JHU), All Rights Reserved.
 
 --- begin cisst license - do not edit ---
 
@@ -19,6 +19,7 @@ http://www.cisst.org/cisst/license.txt.
 #include <stdlib.h>
 
 #include <cisstCommon/cmnPortability.h>
+#include <cisstCommon/cmnUnits.h>
 
 #if (CISST_OS == CISST_WINDOWS)
 typedef unsigned __int32 uint32_t;
@@ -231,13 +232,13 @@ void mtsUniversalRobotScriptRT::Init(void)
     m_measured_js.Name()[3] = "wrist_1_joint";
     m_measured_js.Name()[4] = "wrist_2_joint";
     m_measured_js.Name()[5] = "wrist_3_joint";
-    m_measured_js.Type().SetSize(NB_Actuators, PRM_JOINT_REVOLUTE);
+    std::cerr << CMN_LOG_DETAILS << " need to add joint configuration with names, type and maybe limits?  Can we retrieve these via API?" << std::endl;
+    // m_measured_js.Type().SetSize(NB_Actuators, PRM_JOINT_REVOLUTE);
     m_measured_js.Position().SetSize(NB_Actuators, 0.0);
     m_measured_js.Velocity().SetSize(NB_Actuators, 0.0);
     m_measured_js.Effort().SetSize(NB_Actuators, 0.0);
     // Desired joint state (commanded values)
     m_setpoint_js.Name().ForceAssign(m_measured_js.Name());
-    m_setpoint_js.Type().ForceAssign(m_measured_js.Type());
     m_setpoint_js.Position().ForceAssign(m_measured_js.Position());
     m_setpoint_js.Velocity().ForceAssign(m_measured_js.Velocity());
     m_setpoint_js.Effort().ForceAssign(m_measured_js.Effort());
