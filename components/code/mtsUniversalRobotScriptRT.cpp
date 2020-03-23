@@ -189,13 +189,17 @@ std::string mtsUniversalRobotScriptRT::SafetyModeName(int mode)
 
 // Constructor
 mtsUniversalRobotScriptRT::mtsUniversalRobotScriptRT(const std::string &name, unsigned int sizeStateTable, bool newThread) :
-    mtsTaskContinuous(name, sizeStateTable, newThread), buffer_idx(0), version(VER_UNKNOWN)
+    mtsTaskContinuous(name, sizeStateTable, newThread),
+    ConfigurationStateTable(100, "Configuration"),
+    buffer_idx(0), version(VER_UNKNOWN)
 {
     Init();
 }
 
 mtsUniversalRobotScriptRT::mtsUniversalRobotScriptRT(const mtsTaskContinuousConstructorArg &arg) :
-    mtsTaskContinuous(arg), buffer_idx(0), version(VER_UNKNOWN)
+    mtsTaskContinuous(arg),
+    ConfigurationStateTable(100, "Configuration"),
+    buffer_idx(0), version(VER_UNKNOWN)
 {
     Init();
 }
@@ -224,6 +228,17 @@ void mtsUniversalRobotScriptRT::Init(void)
     isMotionActive = false;
 
 
+    // Joint Configuration
+    m_configuration_j.Name().SetSize(NB_Actuators);
+    m_configuration_j.Name().at(0) = "shoulder_pan_joint";
+    m_configuration_j.Name().at(1) = "shoulder_lift_joint";
+    m_configuration_j.Name().at(2) = "elbow_joint";
+    m_configuration_j.Name().at(3) = "wrist_1_joint";
+    m_configuration_j.Name().at(4) = "wrist_2_joint";
+    m_configuration_j.Name().at(5) = "wrist_3_joint";
+    m_configuration_j.Type().SetSize(NB_Actuators);
+    m_configuration_j.Type().SetAll(PRM_JOINT_REVOLUTE);
+
     // Actual joint state (measured values)
     m_measured_js.Name().SetSize(NB_Actuators);
     m_measured_js.Name()[0] = "shoulder_pan_joint";
@@ -248,6 +263,8 @@ void mtsUniversalRobotScriptRT::Init(void)
     jtpos.SetSize(NB_Actuators);
     jtvel.SetSize(NB_Actuators);
     debug.SetAll(0.0);
+
+    // Populate state tables
     StateTable.AddData(ControllerTime, "ControllerTime");
     StateTable.AddData(ControllerExecTime, "ControllerExecTime");
     StateTable.AddData(robotMode, "RobotMode");
@@ -265,6 +282,12 @@ void mtsUniversalRobotScriptRT::Init(void)
     StateTable.AddData(TCPForce, "ForceCartesianForce");
     StateTable.AddData(m_measured_cf, "measured_cf");
     StateTable.AddData(debug, "Debug");
+
+    AddStateTable(&ConfigurationStateTable);
+    ConfigurationStateTable.SetAutomaticAdvance(false);
+    ConfigurationStateTable.Start();
+    ConfigurationStateTable.Advance();
+    ConfigurationStateTable.AddData(m_configuration_j, "configuration_j");
 
     mInterface = AddInterfaceProvided("control");
     if (mInterface) {
