@@ -16,7 +16,7 @@ add_subdirectory (ConsoleTest)
 
 # Find cisst to define catkin macros so we can define the executable
 # output path
-find_package (cisst 1.0.11 REQUIRED)
+find_package (cisst 1.1 REQUIRED)
 
 if (cisst_FOUND)
 
