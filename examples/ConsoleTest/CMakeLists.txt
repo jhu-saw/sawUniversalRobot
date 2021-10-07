@@ -1,5 +1,5 @@
 #
-# (C) Copyright 2016-2017 Johns Hopkins University (JHU), All Rights Reserved.
+# (C) Copyright 2016-2021 Johns Hopkins University (JHU), All Rights Reserved.
 #
 # --- begin cisst license - do not edit ---
 #
@@ -26,14 +26,8 @@ if (cisst_FOUND_AS_REQUIRED)
   # load cisst configuration
   include (${CISST_USE_FILE})
 
-  # catkin/ROS paths
-  cisst_is_catkin_build (sawUniversalRobot_IS_CATKIN_BUILT)
-  if (sawUniversalRobot_IS_CATKIN_BUILT)
-    set (EXECUTABLE_OUTPUT_PATH "${CATKIN_DEVEL_PREFIX}/bin")
-    set (LIBRARY_OUTPUT_PATH    "${CATKIN_DEVEL_PREFIX}/lib")
-  endif ()
-
-  find_package (sawUniversalRobot 1.1.0 REQUIRED)
+  find_package (sawUniversalRobot 1.1.0 REQUIRED
+                HINTS "${CMAKE_BINARY_DIR}/components")
   include_directories (${sawUniversalRobot_INCLUDE_DIR})
   link_directories (${sawUniversalRobot_LIBRARY_DIR})
 

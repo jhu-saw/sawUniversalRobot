@@ -11,5 +11,7 @@
 
 cmake_minimum_required (VERSION 2.8)
 
+project (sawUniversalRobot)
+
 add_subdirectory (components)
 add_subdirectory (examples)

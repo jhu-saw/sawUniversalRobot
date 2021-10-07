@@ -1,5 +1,5 @@
 #
-# (C) Copyright 2014-2019 Johns Hopkins University (JHU), All Rights Reserved.
+# (C) Copyright 2014-2021 Johns Hopkins University (JHU), All Rights Reserved.
 #
 # --- begin cisst license - do not edit ---
 #
@@ -12,11 +12,9 @@
 cmake_minimum_required (VERSION 2.8)
 project (sawUniversalRobotExamples)
 
-add_subdirectory (ConsoleTest)
-
 # Find cisst to define catkin macros so we can define the executable
-# output path
-find_package (cisst 1.1 REQUIRED)
+# output path (it is enough to find cisstCommon)
+find_package (cisst 1.1 COMPONENTS cisstCommon)
 
 if (cisst_FOUND)
 
@@ -28,7 +26,16 @@ if (cisst_FOUND)
   if (sawUniversalRobot_IS_CATKIN_BUILT)
     set (EXECUTABLE_OUTPUT_PATH "${CATKIN_DEVEL_PREFIX}/bin")
     set (LIBRARY_OUTPUT_PATH    "${CATKIN_DEVEL_PREFIX}/lib")
+  else ()
+    if (NOT LIBRARY_OUTPUT_PATH)
+       set (LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_BINARY_DIR}/lib")
+    endif (NOT LIBRARY_OUTPUT_PATH)
+    if (NOT EXECUTABLE_OUTPUT_PATH)
+       set (EXECUTABLE_OUTPUT_PATH "${CMAKE_CURRENT_BINARY_DIR}/bin")
+    endif (NOT EXECUTABLE_OUTPUT_PATH)
   endif ()
+
+  add_subdirectory (ConsoleTest)
 
   # Copy python file to the bin directory
   add_custom_target (sawUniversalRobotExamples ALL

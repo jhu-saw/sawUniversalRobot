@@ -1,5 +1,5 @@
 #
-# (C) Copyright 2014-2019 Johns Hopkins University (JHU), All Rights Reserved.
+# (C) Copyright 2014-2021 Johns Hopkins University (JHU), All Rights Reserved.
 #
 # --- begin cisst license - do not edit ---
 #
@@ -9,9 +9,9 @@
 #
 # --- end cisst license ---
 
-project (sawUniversalRobot)
-
 cmake_minimum_required (VERSION 2.8)
+
+project (sawUniversalRobot)
 
 set (REQUIRED_CISST_LIBRARIES
      cisstCommon
@@ -35,6 +35,9 @@ if (cisst_FOUND_AS_REQUIRED)
     set (EXECUTABLE_OUTPUT_PATH "${CATKIN_DEVEL_PREFIX}/bin")
     set (LIBRARY_OUTPUT_PATH    "${CATKIN_DEVEL_PREFIX}/lib")
   else ()
+    if (NOT LIBRARY_OUTPUT_PATH)
+       set (LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_BINARY_DIR}/lib")
+    endif (NOT LIBRARY_OUTPUT_PATH)
     set (sawUniversalRobot_CONFIG_FILE_DIR "${sawUniversalRobot_BINARY_DIR}")
   endif ()
 
