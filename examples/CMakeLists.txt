@@ -9,7 +9,7 @@
 #
 # --- end cisst license ---
 
-cmake_minimum_required (VERSION 2.8)
+cmake_minimum_required (VERSION 3.0)
 project (sawUniversalRobotExamples)
 
 # Find cisst to define catkin macros so we can define the executable
