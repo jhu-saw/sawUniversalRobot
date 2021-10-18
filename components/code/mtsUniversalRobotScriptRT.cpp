@@ -4,7 +4,7 @@
 /*
   Author(s): Peter Kazanzides, H. Tutkun Sen, Shuyang Chen
 
-  (C) Copyright 2016-2020 Johns Hopkins University (JHU), All Rights Reserved.
+  (C) Copyright 2016-2021 Johns Hopkins University (JHU), All Rights Reserved.
 
 --- begin cisst license - do not edit ---
 
@@ -906,19 +906,31 @@ void mtsUniversalRobotScriptRT::move_cp(const prmPositionCartesianSet & cartPos)
     char CartPosCmdString[100];
     if (UR_State == UR_IDLE) {
         vctDoubleFrm3 cartFrm = cartPos.GetGoal();
-        vctRodriguezRotation3<double> rot;
-        rot.From(cartFrm.Rotation());  // The rotation vector
-        // a (acceleration) is in m/s^2 and v (velocity) is in m/s.
-        // For now, use hard-coded values. In future, improve prmPositionCartesianSet
-        // to be able to reliably specify acceleration and velocity.
-        sprintf(CartPosCmdString,
-            "movel(p[%6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf], a=%6.4lf, v=%6.4lf)\n",
-            cartFrm.Translation().X(), cartFrm.Translation().Y(), cartFrm.Translation().Z(),
-            rot.X(), rot.Y(), rot.Z(), 0.8, 0.03);
-        if (socket.Send(CartPosCmdString) == -1) {
-            SocketError();
-        } else {
-            UR_State = UR_POS_MOVING;
+        vctBool2 mask = cartPos.GetMask();
+        if (mask.All()) {
+            vctRodriguezRotation3<double> rot;
+            rot.From(cartFrm.Rotation());  // The rotation vector
+            // a (acceleration) is in m/s^2 and v (velocity) is in m/s.
+            double trajVel = cartPos.GetVelocity().MaxAbsElement();
+            if (trajVel == 0.0)
+                trajVel = 0.03;  // default speed
+            double trajAcc = cartPos.GetAcceleration().MaxAbsElement();
+            if (trajAcc == 0.0)
+                trajAcc = 0.8;   // default acceleration
+            sprintf(CartPosCmdString,
+                "movel(p[%6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf], a=%6.4lf, v=%6.4lf)\n",
+                cartFrm.Translation().X(), cartFrm.Translation().Y(), cartFrm.Translation().Z(),
+                    rot.X(), rot.Y(), rot.Z(), trajAcc, trajVel);
+            if (socket.Send(CartPosCmdString) == -1) {
+                SocketError();
+            } else {
+                UR_State = UR_POS_MOVING;
+            }
+        }
+        else {
+            // Really should be an InvalidCommand error
+            CMN_LOG_CLASS_RUN_ERROR << "move_cp: must specify both position and orientation" << std::endl;
+            RobotNotReady();
         }
     } else {
         RobotNotReady();
