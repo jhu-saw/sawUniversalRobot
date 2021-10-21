@@ -191,6 +191,9 @@ protected:
     // Cartesian position move
     void move_cp(const prmPositionCartesianSet & cartPos);
 
+    // Cartesian position relative (incremental) move
+    void move_cr(const prmPositionCartesianSet & cartPos);
+
     // Return the average period (measured by StateTable)
     void GetAveragePeriod(double &period) const
     { period = mtsTask::GetAveragePeriod(); }

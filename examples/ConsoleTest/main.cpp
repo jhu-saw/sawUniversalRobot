@@ -49,6 +49,7 @@ private:
     mtsFunctionRead GetAveragePeriod;
     mtsFunctionWrite move_jp;
     mtsFunctionWrite move_cp;
+    mtsFunctionWrite move_cr;
     mtsFunctionWrite servo_jv;
     mtsFunctionWrite servo_cp;
     mtsFunctionRead GetDebug;
@@ -94,6 +95,7 @@ private:
         std::cout << std::endl << "Status: " << msg.Message << std::endl;
     }
 
+    void GetCartesianPose(prmPositionCartesianSet &cartposSet);
 
 public:
 
@@ -112,6 +114,7 @@ public:
             req->AddFunction("GetAveragePeriod", GetAveragePeriod);
             req->AddFunction("move_jp", move_jp);
             req->AddFunction("move_cp", move_cp);
+            req->AddFunction("move_cr", move_cr);
             req->AddFunction("servo_jv", servo_jv);
             req->AddFunction("servo_cv", servo_cp);
             req->AddFunction("GetDebug", GetDebug);
@@ -159,6 +162,7 @@ public:
                   << "  D: send command to dashboard server" << std::endl
                   << "  p: set payload" << std::endl
                   << "  P: show popup message" << std::endl
+                  << "  R: relative position move cartesian" << std::endl
                   << "  s: stop motion" << std::endl
                   << "  x: get version" << std::endl
                   << "  f: free drive mode" << std::endl
@@ -180,8 +184,6 @@ public:
         bool connected = false;
         double period, cTime, cExecTime;
         vct3 velxyz, velrot;
-        vct3 cartPos, cartVec;
-        vctDoubleRot3 cartRot;
         vct6 debug;
         double payload;
         int toolVoltage;
@@ -222,30 +224,7 @@ public:
                     break;
 
                 case 'M':   // position move Cartesian
-                    std::cout << std::endl << "Enter Cartesian XYZ positions, mm (invalid char to skip): ";
-                    std::cin >> cartPos[0] >> cartPos[1] >> cartPos[2];
-                    if (std::cin.good()) {
-                        cartPos.Divide(1000.0);  // convert from mm to m
-                        cartposSet.SetGoal(cartPos);
-                    }
-                    else {
-                        std::cout << "Skipping position" << std::endl;
-                        std::cin.clear();
-                        std::cin.ignore(100, '\n');
-                    }
-                    std::cout << std::endl << "Enter Cartesian Euler-ZYX orientation, deg (invalid char to skip): ";
-                    std::cin >> cartVec[0] >> cartVec[1] >> cartVec[2];
-                    if (std::cin.good()) {
-                        cartVec.Multiply(cmnPI_180);
-                        vctEulerZYXRotation3 rot(cartVec);
-                        cartRot.From(rot);
-                        cartposSet.SetGoal(cartRot);
-                    }
-                    else {
-                        std::cout << "Skipping orientation" << std::endl;
-                        std::cin.clear();
-                        std::cin.ignore(100, '\n');
-                    }
+                    GetCartesianPose(cartposSet);
                     if (cartposSet.GetMask().Any()) {
                         GetVersion(version);
                         if (version < 3) {
@@ -329,6 +308,17 @@ public:
                     SetRobotRunningMode();
                     break;
 
+                case 'R':   // relative Cartesian motion
+                    GetCartesianPose(cartposSet);
+                    GetVersion(version);
+                    if (version < 3) {
+                        std::cout << std::endl
+                                  << "Relative Cartesian motion not yet supported on CB2" << std::endl;
+                    }
+                    else if (cartposSet.GetMask().Any())
+                        move_cr(cartposSet);
+                    break;
+
                 case 'i':   // robot info
                     std::cout << std::endl
                               << "Controller Time: " << cTime << std::endl
@@ -409,6 +399,36 @@ public:
 
 };
 
+void UniversalRobotClient::GetCartesianPose(prmPositionCartesianSet &cartposSet)
+{
+    vct3 cartPos, cartVec;
+    vctDoubleRot3 cartRot;
+
+    std::cout << std::endl << "Enter Cartesian XYZ positions, mm (invalid char to skip): ";
+    std::cin >> cartPos[0] >> cartPos[1] >> cartPos[2];
+    if (std::cin.good()) {
+        cartPos.Divide(1000.0);  // convert from mm to m
+        cartposSet.SetGoal(cartPos);
+    }
+    else {
+        std::cout << "Skipping position" << std::endl;
+        std::cin.clear();
+        std::cin.ignore(100, '\n');
+    }
+    std::cout << std::endl << "Enter Cartesian Euler-ZYX orientation, deg (invalid char to skip): ";
+    std::cin >> cartVec[0] >> cartVec[1] >> cartVec[2];
+    if (std::cin.good()) {
+        cartVec.Multiply(cmnPI_180);
+        vctEulerZYXRotation3 rot(cartVec);
+        cartRot.From(rot);
+        cartposSet.SetGoal(cartRot);
+    }
+    else {
+        std::cout << "Skipping orientation" << std::endl;
+        std::cin.clear();
+        std::cin.ignore(100, '\n');
+    }
+}
 
 int main(int argc, char **argv)
 {

@@ -320,6 +320,8 @@ void mtsUniversalRobotScriptRT::Init(void)
                                     this, "servo_cv");
         mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::move_cp,
                                     this, "move_cp");
+        mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::move_cr,
+                                    this, "move_cr");
 
         // Following are not yet standardized
         mInterface->AddCommandReadState(StateTable, ControllerTime, "GetControllerTime");
@@ -598,7 +600,7 @@ void mtsUniversalRobotScriptRT::Run(void)
                 isEStop = (safetyMode == SAFETY_MODE_ROBOT_EMERGENCY_STOP);
                 isSecurityStop = (safetyMode == SAFETY_MODE_PROTECTIVE_STOP);
                 // Convert target Cartesian position to setpoint_cp; also save it in setpointCP
-                // for possible use by move_cp.
+                // for possible use by move_cp and move_cr.
                 setpointCP.Assign(packet->tool_vec_Tar);
                 vct3 position(packet->tool_vec_Tar);
                 vct3 orientation(packet->tool_vec_Tar+3);
@@ -971,6 +973,34 @@ void mtsUniversalRobotScriptRT::move_cp(const prmPositionCartesianSet & cartPos)
     } else {
         RobotNotReady();
     }
+}
+
+void mtsUniversalRobotScriptRT::move_cr(const prmPositionCartesianSet & cartPos)
+{
+    vctBool2 mask = cartPos.GetMask();
+    if (!mask.Any()) {
+        CMN_LOG_CLASS_RUN_WARNING << "move_cr: no move specified (mask is false)" << std::endl;
+        return;
+    }
+    if (version < VER_30_31) {
+        CMN_LOG_CLASS_RUN_ERROR << "move_cr: not currently supported on CB2" << std::endl;
+        // May be able to use UR script function get_target_tcp_pose()
+        RobotNotReady();
+        return;
+    }
+    prmPositionCartesianSet cartPosAbs(cartPos);
+    // Only need to update masked goals
+    if (mask[0]) {
+        vct3 pos(m_setpoint_cp.Position().Translation());
+        pos.Add(cartPos.Goal().Translation());
+        cartPosAbs.SetGoal(pos);
+    }
+    if (mask[1]) {
+        vctDoubleRot3 rot(m_setpoint_cp.Position().Rotation());
+        rot = cartPos.Goal().Rotation()*rot;
+        cartPosAbs.SetGoal(rot);
+    }
+    move_cp(cartPosAbs);
 }
 
 void mtsUniversalRobotScriptRT::StopMotion(void)
