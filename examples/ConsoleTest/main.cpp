@@ -2,7 +2,7 @@
 /*ex: set filetype=cpp softtabstop=4 shiftwidth=4 tabstop=4 cindent expandtab:*/
 
 /*
-(C) Copyright 2016-2020 Johns Hopkins University (JHU), All Rights Reserved.
+(C) Copyright 2016-2021 Johns Hopkins University (JHU), All Rights Reserved.
 
 --- begin cisst license - do not edit ---
 
@@ -14,11 +14,12 @@ http://www.cisst.org/cisst/license.txt.
 */
 
 #include <cisstConfig.h>
-#include <cisstVector/vctRodriguezRotation3.h>
 #include <cisstCommon/cmnLogger.h>
 #include <cisstCommon/cmnKbHit.h>
 #include <cisstCommon/cmnGetChar.h>
 #include <cisstCommon/cmnConstants.h>
+#include <cisstVector/vctRodriguezRotation3.h>
+#include <cisstVector/vctEulerRotation3.h>
 #include <cisstOSAbstraction/osaSleep.h>
 #include <cisstMultiTask/mtsManagerLocal.h>
 #include <cisstMultiTask/mtsTaskContinuous.h>
@@ -67,6 +68,7 @@ private:
     mtsFunctionVoid DisableMotorPower;
 
     bool debugMode;
+    bool cartMode;
 
     void OnSocketError(void) {
         std::cout << std::endl << "Socket error communicating with robot" << std::endl;
@@ -97,7 +99,7 @@ public:
 
     UniversalRobotClient() : mtsTaskMain("UniversalRobotClient"),
                              jtgoal(6), jtvel(6), jtposSet(6), jtvelSet(6),
-                             debugMode(false)
+                             debugMode(false), cartMode(false)
     {
         m_measured_js.SetSize(6);
         mtsInterfaceRequired *req = AddInterfaceRequired("Input", MTS_OPTIONAL);
@@ -152,6 +154,7 @@ public:
                   << "  M: position move cartesian" << std::endl
                   << "  v: velocity move joints" << std::endl
                   << "  V: velocity move cartesian" << std::endl
+                  << "  c: toggle Cartesian/joint pose display" << std::endl
                   << "  d: toggle debug data display" << std::endl
                   << "  D: send command to dashboard server" << std::endl
                   << "  p: set payload" << std::endl
@@ -219,21 +222,44 @@ public:
                     break;
 
                 case 'M':   // position move Cartesian
-                    std::cout << std::endl << "Enter Cartesian positions (mm): ";
+                    std::cout << std::endl << "Enter Cartesian XYZ positions, mm (invalid char to skip): ";
                     std::cin >> cartPos[0] >> cartPos[1] >> cartPos[2];
-                    cartPos.Divide(1000.0);  // convert from mm to m
-                    cartposSet.SetGoal(cartPos);
-                    std::cout << std::endl << "Enter Cartesian orientation (Rodriguez; 0,0,0 to skip): ";
-                    std::cin >> cartVec[0] >> cartVec[1] >> cartVec[2];
-                    if (cartVec.Any()) {
-                        vctRodriguezRotation3<double> rot(cartVec);
-                        cartRot.From(rot);
+                    if (std::cin.good()) {
+                        cartPos.Divide(1000.0);  // convert from mm to m
+                        cartposSet.SetGoal(cartPos);
                     }
                     else {
-                        cartRot.Assign(m_measured_cp.Position().Rotation());
+                        std::cout << "Skipping position" << std::endl;
+                        std::cin.clear();
+                        std::cin.ignore(100, '\n');
                     }
-                    cartposSet.SetGoal(cartRot);
-                    move_cp(cartposSet);
+                    std::cout << std::endl << "Enter Cartesian Euler-ZYX orientation, deg (invalid char to skip): ";
+                    std::cin >> cartVec[0] >> cartVec[1] >> cartVec[2];
+                    if (std::cin.good()) {
+                        cartVec.Multiply(cmnPI_180);
+                        vctEulerZYXRotation3 rot(cartVec);
+                        cartRot.From(rot);
+                        cartposSet.SetGoal(cartRot);
+                    }
+                    else {
+                        std::cout << "Skipping orientation" << std::endl;
+                        std::cin.clear();
+                        std::cin.ignore(100, '\n');
+                    }
+                    if (cartposSet.GetMask().Any()) {
+                        GetVersion(version);
+                        if (version < 3) {
+                            // Old versions of controller do not provide the target Cartesian
+                            // position, so we instead use the measured position for elements
+                            // that were not specified. In the future, this could be handled
+                            // by mtsUniversalRobotScriptRT.
+                            if (!cartposSet.GetMask()[0])
+                                cartposSet.SetGoal(m_measured_cp.Position().Translation());
+                            if (!cartposSet.GetMask()[1])
+                                cartposSet.SetGoal(m_measured_cp.Position().Rotation());
+                        }
+                        move_cp(cartposSet);
+                    }
                     break;
 
                 case 'v':   // velocity move joint
@@ -258,6 +284,10 @@ public:
 
                 case 'd':  // display debug data
                     debugMode = !debugMode;
+                    break;
+
+                case 'c':  // Cartesian display mode
+                    cartMode = !cartMode;
                     break;
 
                 case 'D':
@@ -355,12 +385,22 @@ public:
 
             vctDoubleVec jtposDeg(m_measured_js.Position());
             jtposDeg.Multiply(cmn180_PI);
-            if (debugMode)
+            if (debugMode) {
                printf("DEBUG: [%6.1lf,%6.1lf,%6.1lf,%6.1lf,%6.1lf,%6.1lf]                           \r",
                       debug[0], debug[1], debug[2], debug[3], debug[4], debug[5]);
-            else
+            }
+            else if (cartMode) {
+                vct3 cpos(m_measured_cp.Position().Translation());
+                cpos.Multiply(1000.0);  // Convert to mm
+                vctEulerZYXRotation3 eulerRot(m_measured_cp.Position().Rotation());
+                vct3 angles(eulerRot.GetAnglesInDegrees());
+                printf("CART (mm, Euler deg): [%5.2lf,%5.2lf,%5.2lf,%5.2lf,%5.2lf,%5.2lf], PERIOD (s): %6.4lf\r",
+                       cpos.X(), cpos.Y(), cpos.Z(), angles.X(), angles.Y(), angles.Z(), period);
+            }
+            else {
                printf("JOINTS (deg): [%5.2lf,%5.2lf,%5.2lf,%5.2lf,%5.2lf,%5.2lf], PERIOD (s): %6.4lf\r",
                       jtposDeg[0], jtposDeg[1], jtposDeg[2], jtposDeg[3], jtposDeg[4], jtposDeg[5], period);
+            }
         }
         osaSleep(0.01);  // to avoid taking too much CPU time
     }
