@@ -267,6 +267,7 @@ void mtsUniversalRobotScriptRT::Init(void)
     // cartesian data
     TCPSpeed.SetAll(0.0);
     TCPForce.SetAll(0.0);
+    setpointCP.SetAll(0.0);
     jtpos.SetSize(NB_Actuators);
     jtvel.SetSize(NB_Actuators);
     debug.SetAll(0.0);
@@ -284,8 +285,10 @@ void mtsUniversalRobotScriptRT::Init(void)
     StateTable.AddData(m_measured_js, "measured_js");
     StateTable.AddData(m_setpoint_js, "setpoint_js");
     StateTable.AddData(m_measured_cp, "measured_cp");
+    StateTable.AddData(m_setpoint_cp, "setpoint_cp");
     StateTable.AddData(TCPSpeed, "VelocityCartesian");
     StateTable.AddData(m_measured_cv, "measured_cv");
+    StateTable.AddData(m_setpoint_cv, "setpoint_cv");
     StateTable.AddData(TCPForce, "ForceCartesianForce");
     StateTable.AddData(m_measured_cf, "measured_cf");
     StateTable.AddData(debug, "Debug");
@@ -305,7 +308,9 @@ void mtsUniversalRobotScriptRT::Init(void)
         mInterface->AddCommandReadState(this->StateTable, m_measured_js, "measured_js");
         mInterface->AddCommandReadState(this->StateTable, m_setpoint_js, "setpoint_js");
         mInterface->AddCommandReadState(this->StateTable, m_measured_cp, "measured_cp");
+        mInterface->AddCommandReadState(this->StateTable, m_setpoint_cp, "setpoint_cp");
         mInterface->AddCommandReadState(this->StateTable, m_measured_cv, "measured_cv");
+        mInterface->AddCommandReadState(this->StateTable, m_setpoint_cv, "setpoint_cv");
         mInterface->AddCommandReadState(this->StateTable, m_measured_cf, "measured_cf");
         mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::servo_jv,
                                     this, "servo_jv");
@@ -410,6 +415,8 @@ void mtsUniversalRobotScriptRT::Run(void)
     m_measured_cp.SetValid(false);
     m_measured_cv.SetValid(false);
     m_measured_cf.SetValid(false);
+    m_setpoint_cp.SetValid(false);
+    m_setpoint_cv.SetValid(false);
 
     // Turn this on to enable sanity check of time difference.
     //bool timeCheckEnabled = (ControllerTime != 0);
@@ -590,6 +597,19 @@ void mtsUniversalRobotScriptRT::Run(void)
                 // Whether e-stop is pressed
                 isEStop = (safetyMode == SAFETY_MODE_ROBOT_EMERGENCY_STOP);
                 isSecurityStop = (safetyMode == SAFETY_MODE_PROTECTIVE_STOP);
+                // Convert target Cartesian position to setpoint_cp; also save it in setpointCP
+                // for possible use by move_cp.
+                setpointCP.Assign(packet->tool_vec_Tar);
+                vct3 position(packet->tool_vec_Tar);
+                vct3 orientation(packet->tool_vec_Tar+3);
+                vctRodriguezRotation3<double> rot(orientation);
+                vctDoubleRot3 cartRot(rot);  // rotation matrix, from world frame to the end-effector frame
+                vctFrm3 frm(cartRot, position);
+                m_setpoint_cp.SetPosition(frm);
+                m_setpoint_cp.SetValid(true);
+                // Target Cartesian velocity
+                m_setpoint_cv.SetVelocity(vct6(packet->TCP_speed_Tar));
+                m_setpoint_cv.SetValid(true);
             }
             if (tool_vec) {
                 vct3 position(tool_vec);
@@ -907,30 +927,46 @@ void mtsUniversalRobotScriptRT::move_cp(const prmPositionCartesianSet & cartPos)
     if (UR_State == UR_IDLE) {
         vctDoubleFrm3 cartFrm = cartPos.GetGoal();
         vctBool2 mask = cartPos.GetMask();
-        if (mask.All()) {
-            vctRodriguezRotation3<double> rot;
-            rot.From(cartFrm.Rotation());  // The rotation vector
-            // a (acceleration) is in m/s^2 and v (velocity) is in m/s.
-            double trajVel = cartPos.GetVelocity().MaxAbsElement();
-            if (trajVel == 0.0)
-                trajVel = 0.03;  // default speed
-            double trajAcc = cartPos.GetAcceleration().MaxAbsElement();
-            if (trajAcc == 0.0)
-                trajAcc = 0.8;   // default acceleration
-            sprintf(CartPosCmdString,
-                "movel(p[%6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf], a=%6.4lf, v=%6.4lf)\n",
-                cartFrm.Translation().X(), cartFrm.Translation().Y(), cartFrm.Translation().Z(),
-                    rot.X(), rot.Y(), rot.Z(), trajAcc, trajVel);
-            if (socket.Send(CartPosCmdString) == -1) {
-                SocketError();
-            } else {
-                UR_State = UR_POS_MOVING;
-            }
+        if (!mask.Any()) {
+            CMN_LOG_CLASS_RUN_WARNING << "move_cp: no move specified (mask is false)" << std::endl;
+            return;
+        }
+        if ((version < VER_30_31) && !mask.All()) {
+            CMN_LOG_CLASS_RUN_ERROR << "move_cp: must specify both position and orientation for CB2" << std::endl;
+            RobotNotReady();
+            return;
+        }
+        vct3 posGoal;
+        if (mask[0]) {
+            posGoal = cartFrm.Translation();
         }
         else {
-            // Really should be an InvalidCommand error
-            CMN_LOG_CLASS_RUN_ERROR << "move_cp: must specify both position and orientation" << std::endl;
-            RobotNotReady();
+            posGoal.Assign(setpointCP.Pointer());
+        }
+        vct3 rotGoal;
+        if (mask[1]) {
+            vctRodriguezRotation3<double> rot;
+            rot.From(cartFrm.Rotation());  // The rotation vector
+            rotGoal.Assign(rot);
+        }
+        else {
+            rotGoal.Assign(setpointCP.Pointer()+3);
+        }
+        // a (acceleration) is in m/s^2 and v (velocity) is in m/s.
+        double trajVel = cartPos.GetVelocity().MaxAbsElement();
+        if (trajVel == 0.0)
+            trajVel = 0.03;  // default speed
+        double trajAcc = cartPos.GetAcceleration().MaxAbsElement();
+        if (trajAcc == 0.0)
+            trajAcc = 0.8;   // default acceleration
+        sprintf(CartPosCmdString,
+            "movel(p[%6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf], a=%6.4lf, v=%6.4lf)\n",
+                posGoal.X(), posGoal.Y(), posGoal.Z(),
+                rotGoal.X(), rotGoal.Y(), rotGoal.Z(), trajAcc, trajVel);
+        if (socket.Send(CartPosCmdString) == -1) {
+            SocketError();
+        } else {
+            UR_State = UR_POS_MOVING;
         }
     } else {
         RobotNotReady();
