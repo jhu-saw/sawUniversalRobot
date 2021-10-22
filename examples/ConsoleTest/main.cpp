@@ -206,6 +206,7 @@ public:
         GetAveragePeriod(period);
 
         if (connected) {
+            cartposSet.SetMask(vctBool2(false, false));
             if (cmnKbHit()) {
                 char c = cmnGetChar();
                 switch (c) {
@@ -384,12 +385,12 @@ public:
                 cpos.Multiply(1000.0);  // Convert to mm
                 vctEulerZYXRotation3 eulerRot(m_measured_cp.Position().Rotation());
                 vct3 angles(eulerRot.GetAnglesInDegrees());
-                printf("CART (mm, Euler deg): [%5.2lf,%5.2lf,%5.2lf,%5.2lf,%5.2lf,%5.2lf], PERIOD (s): %6.4lf\r",
+                printf("CART (mm, Euler deg): [ %7.2lf, %7.2lf, %7.2lf, %7.2lf, %7.2lf, %7.2lf ], PERIOD (s): %6.4lf\r",
                        cpos.X(), cpos.Y(), cpos.Z(), angles.X(), angles.Y(), angles.Z(), period);
             }
             else {
-               printf("JOINTS (deg): [%5.2lf,%5.2lf,%5.2lf,%5.2lf,%5.2lf,%5.2lf], PERIOD (s): %6.4lf\r",
-                      jtposDeg[0], jtposDeg[1], jtposDeg[2], jtposDeg[3], jtposDeg[4], jtposDeg[5], period);
+                printf("JOINTS (deg):         [ %7.2lf, %7.2lf, %7.2lf, %7.2lf, %7.2lf, %7.2lf ], PERIOD (s): %6.4lf\r",
+                       jtposDeg[0], jtposDeg[1], jtposDeg[2], jtposDeg[3], jtposDeg[4], jtposDeg[5], period);
             }
         }
         osaSleep(0.01);  // to avoid taking too much CPU time
@@ -415,7 +416,7 @@ void UniversalRobotClient::GetCartesianPose(prmPositionCartesianSet &cartposSet)
         std::cin.clear();
         std::cin.ignore(100, '\n');
     }
-    std::cout << std::endl << "Enter Cartesian Euler-ZYX orientation, deg (invalid char to skip): ";
+    std::cout << "Enter Cartesian Euler-ZYX orientation, deg (invalid char to skip): ";
     std::cin >> cartVec[0] >> cartVec[1] >> cartVec[2];
     if (std::cin.good()) {
         cartVec.Multiply(cmnPI_180);
