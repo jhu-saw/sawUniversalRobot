@@ -18,7 +18,6 @@ http://www.cisst.org/cisst/license.txt.
 #include <cisstCommon/cmnKbHit.h>
 #include <cisstCommon/cmnGetChar.h>
 #include <cisstCommon/cmnConstants.h>
-#include <cisstVector/vctRodriguezRotation3.h>
 #include <cisstVector/vctEulerRotation3.h>
 #include <cisstOSAbstraction/osaSleep.h>
 #include <cisstMultiTask/mtsManagerLocal.h>
@@ -95,7 +94,7 @@ private:
         std::cout << std::endl << "Status: " << msg.Message << std::endl;
     }
 
-    void GetCartesianPose(prmPositionCartesianSet &cartposSet);
+    void GetCartesianPose(prmPositionCartesianSet &cartposSet, bool isRelative = false);
 
 public:
 
@@ -205,17 +204,29 @@ public:
         GetConnected(connected);
         GetAveragePeriod(period);
 
-        if (connected) {
-            cartposSet.SetMask(vctBool2(false, false));
-            if (cmnKbHit()) {
-                char c = cmnGetChar();
-                switch (c) {
+        char c = 0;
+        if (cmnKbHit()) {
+            c = cmnGetChar();
+            switch (c) {
 
-                case 'h':
-                    std::cout << std::endl;
+            case 'h':
+                std::cout << std::endl;
+                if (!connected)
+                    std::cout << "Not connected, press 'q' to quit" << std::endl;
+                else
                     PrintHelp();
-                    break;
+                break;
 
+            case 'q':   // quit program
+                std::cout << "Exiting.. " << std::endl;
+                this->Kill();
+                break;
+            }
+        }
+
+        if (connected) {
+            if (c) {
+            switch (c) {
                 case 'm':   // position move joint
                     std::cout << std::endl << "Enter joint positions (deg): ";
                     std::cin >> jtgoal[0] >> jtgoal[1] >> jtgoal[2] >> jtgoal[3] >> jtgoal[4] >> jtgoal[5];
@@ -225,7 +236,7 @@ public:
                     break;
 
                 case 'M':   // position move Cartesian
-                    GetCartesianPose(cartposSet);
+                    GetCartesianPose(cartposSet, false);
                     if (cartposSet.GetMask().Any()) {
                         GetVersion(version);
                         if (version < 3) {
@@ -310,7 +321,7 @@ public:
                     break;
 
                 case 'R':   // relative Cartesian motion
-                    GetCartesianPose(cartposSet);
+                    GetCartesianPose(cartposSet, true);
                     GetVersion(version);
                     if (version < 3) {
                         std::cout << std::endl
@@ -365,12 +376,6 @@ public:
                     std::cin >> toolVoltage;
                     SetToolVoltage(toolVoltage);
                     break;
-
-                case 'q':   // quit program
-                    std::cout << "Exiting.. " << std::endl;
-                    this->Kill();
-                    break;
-
                 }
             }
 
@@ -400,11 +405,12 @@ public:
 
 };
 
-void UniversalRobotClient::GetCartesianPose(prmPositionCartesianSet &cartposSet)
+void UniversalRobotClient::GetCartesianPose(prmPositionCartesianSet &cartposSet, bool isRelative)
 {
     vct3 cartPos, cartVec;
     vctDoubleRot3 cartRot;
 
+    cartposSet.SetMask(vctBool2(false, false));
     std::cout << std::endl << "Enter Cartesian XYZ positions, mm (invalid char to skip): ";
     std::cin >> cartPos[0] >> cartPos[1] >> cartPos[2];
     if (std::cin.good()) {
@@ -420,8 +426,16 @@ void UniversalRobotClient::GetCartesianPose(prmPositionCartesianSet &cartposSet)
     std::cin >> cartVec[0] >> cartVec[1] >> cartVec[2];
     if (std::cin.good()) {
         cartVec.Multiply(cmnPI_180);
-        vctEulerZYXRotation3 rot(cartVec);
-        cartRot.From(rot);
+        if (isRelative) {
+            // Compute relative orientation as a rotation matrix
+            vctEulerZYXRotation3 rotCur(m_measured_cp.Position().Rotation());
+            vctEulerZYXRotation3 rotGoalAbs(rotCur.GetAngles()+cartVec);
+            cartRot = vctDoubleRot3(rotGoalAbs)*m_measured_cp.Position().Rotation().Inverse();
+        }
+        else {
+            vctEulerZYXRotation3 rotGoalAbs(cartVec);
+            cartRot.From(rotGoalAbs);
+        }
         cartposSet.SetGoal(cartRot);
     }
     else {
