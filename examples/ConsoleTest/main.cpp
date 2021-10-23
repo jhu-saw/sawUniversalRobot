@@ -32,6 +32,7 @@ class UniversalRobotClient : public mtsTaskMain {
 private:
     prmStateJoint m_measured_js;
     prmPositionCartesianGet m_measured_cp;
+    prmPositionCartesianGet m_setpoint_cp;
     vctDoubleVec jtgoal, jtvel;
     prmPositionJointSet jtposSet;
     prmPositionCartesianSet cartposSet;
@@ -43,6 +44,7 @@ private:
     mtsFunctionRead GetControllerExecTime;
     mtsFunctionRead measured_js;
     mtsFunctionRead measured_cp;
+    mtsFunctionRead setpoint_cp;
     mtsFunctionRead GetConnected;
     mtsFunctionRead GetVersion;
     mtsFunctionRead GetAveragePeriod;
@@ -109,6 +111,7 @@ public:
             req->AddFunction("GetControllerExecTime", GetControllerExecTime);
             req->AddFunction("measured_js", measured_js);
             req->AddFunction("measured_cp", measured_cp);
+            req->AddFunction("setpoint_cp", setpoint_cp);
             req->AddFunction("GetConnected", GetConnected);
             req->AddFunction("GetAveragePeriod", GetAveragePeriod);
             req->AddFunction("move_jp", move_jp);
@@ -201,6 +204,7 @@ public:
         GetControllerExecTime(cExecTime);
         measured_js(m_measured_js);
         measured_cp(m_measured_cp);
+        setpoint_cp(m_setpoint_cp);
         GetConnected(connected);
         GetAveragePeriod(period);
 
@@ -238,8 +242,7 @@ public:
                 case 'M':   // position move Cartesian
                     GetCartesianPose(cartposSet, false);
                     if (cartposSet.GetMask().Any()) {
-                        GetVersion(version);
-                        if (version < 3) {
+                        if (!m_setpoint_cp.Valid()) {
                             // Old versions of controller do not provide the target Cartesian
                             // position, so we instead use the measured position for elements
                             // that were not specified. In the future, this could be handled
@@ -428,9 +431,16 @@ void UniversalRobotClient::GetCartesianPose(prmPositionCartesianSet &cartposSet,
         cartVec.Multiply(cmnPI_180);
         if (isRelative) {
             // Compute relative orientation as a rotation matrix
-            vctEulerZYXRotation3 rotCur(m_measured_cp.Position().Rotation());
-            vctEulerZYXRotation3 rotGoalAbs(rotCur.GetAngles()+cartVec);
-            cartRot = vctDoubleRot3(rotGoalAbs)*m_measured_cp.Position().Rotation().Inverse();
+            vctDoubleRot3 rotCur;
+            if (m_setpoint_cp.Valid()) {
+                rotCur = m_setpoint_cp.Position().Rotation();
+            }
+            else {
+                std::cout << "Cartesian setpoint not available, using measured position" << std::endl;
+                rotCur = m_measured_cp.Position().Rotation();
+            }
+            vctEulerZYXRotation3 rotGoalAbs(vctEulerZYXRotation3(rotCur).GetAngles()+cartVec);
+            cartRot = vctDoubleRot3(rotGoalAbs)*rotCur.Inverse();
         }
         else {
             vctEulerZYXRotation3 rotGoalAbs(cartVec);
