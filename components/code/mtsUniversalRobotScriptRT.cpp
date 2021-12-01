@@ -771,7 +771,7 @@ bool mtsUniversalRobotScriptRT::SendAndReceiveDB(const std::string &cmd, std::st
 
 void mtsUniversalRobotScriptRT::SetRobotFreeDriveMode(void)
 {
-    if ((UR_State == UR_IDLE) || (UR_State == UR_FREE_DRIVE)) {
+    if (isPowerOn && ((UR_State == UR_IDLE) || (UR_State == UR_FREE_DRIVE))) {
         if (version < VER_30_31) {
             if (socket.Send("set robotmode freedrive\n") == -1)
                 SocketError();
@@ -790,7 +790,7 @@ void mtsUniversalRobotScriptRT::SetRobotFreeDriveMode(void)
 
 void mtsUniversalRobotScriptRT::SetRobotRunningMode(void)
 {
-    if (UR_State == UR_FREE_DRIVE) {
+    if (isPowerOn && (UR_State == UR_FREE_DRIVE)) {
         int ret;
         if (version < VER_30_31) {
             ret = socket.Send("set robotmode run\n");
@@ -846,7 +846,7 @@ void mtsUniversalRobotScriptRT::UnlockSecurityStop(void)
 
 void mtsUniversalRobotScriptRT::servo_jv(const prmVelocityJointSet & jtvelSet)
 {
-    if ((UR_State == UR_IDLE) || (UR_State == UR_VEL_MOVING)) {
+    if (isPowerOn && ((UR_State == UR_IDLE) || (UR_State == UR_VEL_MOVING))) {
         jtvelSet.GetGoal(jtvel);
         // velocity check
         for (int i = 0; i < NB_Actuators; i++) {
@@ -888,7 +888,7 @@ void mtsUniversalRobotScriptRT::servo_jv(const prmVelocityJointSet & jtvelSet)
 void mtsUniversalRobotScriptRT::move_jp(const prmPositionJointSet & jtposSet)
 {
     char JointPosCmdString[100];
-    if (UR_State == UR_IDLE) {
+    if (isPowerOn && (UR_State == UR_IDLE)) {
         jtposSet.GetGoal(jtpos);
         // For now, we issue a movej command; in the future, we may use a trajectory
         // generator and use servoj.
@@ -908,7 +908,7 @@ void mtsUniversalRobotScriptRT::move_jp(const prmPositionJointSet & jtposSet)
 
 void mtsUniversalRobotScriptRT::servo_cv(const prmVelocityCartesianSet & cartVel)
 {
-    if ((UR_State == UR_IDLE) || (UR_State == UR_VEL_MOVING)) {
+    if (isPowerOn && ((UR_State == UR_IDLE) || (UR_State == UR_VEL_MOVING))) {
         vct3 velxyz = cartVel.GetVelocity();
         vct3 velrot = cartVel.GetAngularVelocity();
         // speedl(qd, a, t, aRot)
@@ -926,7 +926,7 @@ void mtsUniversalRobotScriptRT::servo_cv(const prmVelocityCartesianSet & cartVel
 void mtsUniversalRobotScriptRT::move_cp(const prmPositionCartesianSet & cartPos)
 {
     char CartPosCmdString[100];
-    if (UR_State == UR_IDLE) {
+    if (isPowerOn && (UR_State == UR_IDLE)) {
         vctDoubleFrm3 cartFrm = cartPos.GetGoal();
         vctBool2 mask = cartPos.GetMask();
         if (!mask.Any()) {
