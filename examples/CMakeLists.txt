@@ -43,4 +43,9 @@ if (cisst_FOUND)
                      ${CMAKE_CURRENT_SOURCE_DIR}/python/ur_robot.py
                      ${EXECUTABLE_OUTPUT_PATH}/${CMAKE_CFG_INTDIR}/ur_robot.py
                      COMMENT "Copying ur_robot.py to ${EXECUTABLE_OUTPUT_PATH}/${CMAKE_CFG_INTDIR}")
+
+  if (CISST_HAS_QT)
+    add_subdirectory (ConsoleQt)
+  endif (CISST_HAS_QT)
+
 endif (cisst_FOUND)

@@ -323,6 +323,8 @@ void mtsUniversalRobotScriptRT::Init(void)
         mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::move_cr,
                                     this, "move_cr");
 
+        mInterface->AddCommandReadState(this->ConfigurationStateTable, m_configuration_j, "configuration_js");
+
         // Following are not yet standardized
         mInterface->AddCommandReadState(StateTable, ControllerTime, "GetControllerTime");
         mInterface->AddCommandReadState(StateTable, ControllerExecTime, "GetControllerExecTime");
@@ -359,6 +361,8 @@ void mtsUniversalRobotScriptRT::Init(void)
         // Stats
         mInterface->AddCommandReadState(StateTable, StateTable.PeriodStats,
                                         "GetPeriodStatistics");
+        mInterface->AddCommandReadState(StateTable, StateTable.PeriodStats,
+                                        "period_statistics");   // Used by mtsSystemQtWidget
     }
 
     for (size_t i = 0; i < VER_MAX; i++)
