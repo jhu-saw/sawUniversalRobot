@@ -2,7 +2,7 @@
 /*ex: set filetype=cpp softtabstop=4 shiftwidth=4 tabstop=4 cindent expandtab:*/
 
 /*
-(C) Copyright 2016-2021 Johns Hopkins University (JHU), All Rights Reserved.
+(C) Copyright 2016-2022 Johns Hopkins University (JHU), All Rights Reserved.
 
 --- begin cisst license - do not edit ---
 
@@ -52,7 +52,7 @@ private:
     mtsFunctionWrite move_cp;
     mtsFunctionWrite move_cr;
     mtsFunctionWrite servo_jv;
-    mtsFunctionWrite servo_cp;
+    mtsFunctionWrite servo_cv;
     mtsFunctionRead GetDebug;
     mtsFunctionWrite SetPayload;
     mtsFunctionWrite SetToolVoltage;
@@ -118,7 +118,7 @@ public:
             req->AddFunction("move_cp", move_cp);
             req->AddFunction("move_cr", move_cr);
             req->AddFunction("servo_jv", servo_jv);
-            req->AddFunction("servo_cv", servo_cp);
+            req->AddFunction("servo_cv", servo_cv);
             req->AddFunction("GetDebug", GetDebug);
             req->AddFunction("SetPayload", SetPayload);
             req->AddFunction("SetToolVoltage", SetToolVoltage);
@@ -273,7 +273,7 @@ public:
                     velrot.Multiply(cmnPI_180);
                     cartVelSet.SetTranslationGoal(velxyz);
                     cartVelSet.SetRotationGoal(velrot);
-                    servo_cp(cartVelSet);
+                    servo_cv(cartVelSet);
                     break;
 
                 case 'd':  // display debug data
