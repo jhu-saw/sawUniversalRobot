@@ -4,7 +4,7 @@
 /*
   Author(s): Peter Kazanzides, H. Tutkun Sen, Shuyang Chen
 
-  (C) Copyright 2016-2021 Johns Hopkins University (JHU), All Rights Reserved.
+  (C) Copyright 2016-2022 Johns Hopkins University (JHU), All Rights Reserved.
 
 --- begin cisst license - do not edit ---
 
@@ -915,10 +915,14 @@ void mtsUniversalRobotScriptRT::servo_cv(const prmVelocityCartesianSet & cartVel
     if (isPowerOn && ((UR_State == UR_IDLE) || (UR_State == UR_VEL_MOVING))) {
         vct3 velxyz = cartVel.GetVelocity();
         vct3 velrot = cartVel.GetAngularVelocity();
+        // a (acceleration) is in m/s^2
+        double accel = cartVel.GetAcceleration().MaxAbsElement();
+        if (accel == 0.0)
+            accel = 1.4;   // default acceleration
         // speedl(qd, a, t, aRot)
         sprintf(VelCmdString,
                 "speedl([%6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf], %6.4lf, 0.1)\n",
-                velxyz.X(), velxyz.Y(), velxyz.Z(), velrot.X(), velrot.Y(), velrot.Z(), 1.4);
+                velxyz.X(), velxyz.Y(), velxyz.Z(), velrot.X(), velrot.Y(), velrot.Z(), accel);
         strcpy(VelCmdStop, "speedl([0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 1.4, 0.0)\n");
         VelCmdTimeout = 125;   // Number of cycles for command to remain valid (1 second)
         UR_State = UR_VEL_MOVING;
