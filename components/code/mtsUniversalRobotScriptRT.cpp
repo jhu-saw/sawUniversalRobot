@@ -935,8 +935,10 @@ void mtsUniversalRobotScriptRT::move_cp(const prmPositionCartesianSet & cartPos)
 {
     char CartPosCmdString[100];
     if (isPowerOn && (UR_State == UR_IDLE)) {
-        vctDoubleFrm3 cartFrm = cartPos.GetGoal();
-        vctBool2 mask = cartPos.GetMask();
+        vctDoubleFrm3 cartFrm;
+        cartPos.GetGoal(cartFrm);
+        vctBool2 mask;
+        cartPos.GetMask(mask);
         if (!mask.Any()) {
             CMN_LOG_CLASS_RUN_WARNING << "move_cp: no move specified (mask is false)" << std::endl;
             return;
@@ -963,10 +965,14 @@ void mtsUniversalRobotScriptRT::move_cp(const prmPositionCartesianSet & cartPos)
             rotGoal.Assign(setpointCP.Pointer()+3);
         }
         // a (acceleration) is in m/s^2 and v (velocity) is in m/s.
-        double trajVel = cartPos.GetVelocity().MaxAbsElement();
+        vctDouble3 trajVelTemp;
+        cartPos.GetVelocity(trajVelTemp);
+        double trajVel = trajVelTemp.MaxAbsElement();
         if (trajVel == 0.0)
             trajVel = 0.03;  // default speed
-        double trajAcc = cartPos.GetAcceleration().MaxAbsElement();
+        vctDouble3 trajAccTemp;
+        cartPos.GetAcceleration(trajAccTemp);
+        double trajAcc = trajAccTemp.MaxAbsElement();
         if (trajAcc == 0.0)
             trajAcc = 0.8;   // default acceleration
         sprintf(CartPosCmdString,
@@ -985,7 +991,8 @@ void mtsUniversalRobotScriptRT::move_cp(const prmPositionCartesianSet & cartPos)
 
 void mtsUniversalRobotScriptRT::move_cr(const prmPositionCartesianSet & cartPos)
 {
-    vctBool2 mask = cartPos.GetMask();
+    vctBool2 mask;
+    cartPos.GetMask(mask);
     if (!mask.Any()) {
         CMN_LOG_CLASS_RUN_WARNING << "move_cr: no move specified (mask is false)" << std::endl;
         return;
@@ -998,16 +1005,15 @@ void mtsUniversalRobotScriptRT::move_cr(const prmPositionCartesianSet & cartPos)
     }
     prmPositionCartesianSet cartPosAbs(cartPos);
     // Only need to update masked goals
+    vct3 pos(m_setpoint_cp.Position().Translation());
+    vctDoubleRot3 rot(m_setpoint_cp.Position().Rotation());
     if (mask[0]) {
-        vct3 pos(m_setpoint_cp.Position().Translation());
         pos.Add(cartPos.Goal().Translation());
-        cartPosAbs.SetGoal(pos);
     }
     if (mask[1]) {
-        vctDoubleRot3 rot(m_setpoint_cp.Position().Rotation());
         rot = cartPos.Goal().Rotation()*rot;
-        cartPosAbs.SetGoal(rot);
     }
+    cartPosAbs.SetGoal(vctDoubleFrm3(rot, pos));
     move_cp(cartPosAbs);
 }
 
