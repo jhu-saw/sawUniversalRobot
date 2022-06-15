@@ -935,10 +935,8 @@ void mtsUniversalRobotScriptRT::move_cp(const prmPositionCartesianSet & cartPos)
 {
     char CartPosCmdString[100];
     if (isPowerOn && (UR_State == UR_IDLE)) {
-        vctDoubleFrm3 cartFrm;
-        cartPos.GetGoal(cartFrm);
-        vctBool2 mask;
-        cartPos.GetMask(mask);
+        vctDoubleFrm3 cartFrm = cartPos.Goal();
+        vctBool2 mask = cartPos.Mask();
         if (!mask.Any()) {
             CMN_LOG_CLASS_RUN_WARNING << "move_cp: no move specified (mask is false)" << std::endl;
             return;
@@ -965,14 +963,10 @@ void mtsUniversalRobotScriptRT::move_cp(const prmPositionCartesianSet & cartPos)
             rotGoal.Assign(setpointCP.Pointer()+3);
         }
         // a (acceleration) is in m/s^2 and v (velocity) is in m/s.
-        vctDouble3 trajVelTemp;
-        cartPos.GetVelocity(trajVelTemp);
-        double trajVel = trajVelTemp.MaxAbsElement();
+        double trajVel = cartPos.Velocity().MaxAbsElement();
         if (trajVel == 0.0)
             trajVel = 0.03;  // default speed
-        vctDouble3 trajAccTemp;
-        cartPos.GetAcceleration(trajAccTemp);
-        double trajAcc = trajAccTemp.MaxAbsElement();
+        double trajAcc = cartPos.Acceleration().MaxAbsElement();
         if (trajAcc == 0.0)
             trajAcc = 0.8;   // default acceleration
         sprintf(CartPosCmdString,
@@ -991,8 +985,7 @@ void mtsUniversalRobotScriptRT::move_cp(const prmPositionCartesianSet & cartPos)
 
 void mtsUniversalRobotScriptRT::move_cr(const prmPositionCartesianSet & cartPos)
 {
-    vctBool2 mask;
-    cartPos.GetMask(mask);
+    vctBool2 mask = cartPos.Mask();
     if (!mask.Any()) {
         CMN_LOG_CLASS_RUN_WARNING << "move_cr: no move specified (mask is false)" << std::endl;
         return;
