@@ -196,6 +196,8 @@ public:
         bool flag;
         const char *versionString[] = { "Unknown", "Pre-1.8", "1.8", "3.0-3.1", "3.2-3.4", "3.5-3.9", "3.10-3.11" };
         size_t i;
+        vct3 posGoal;
+        vctDoubleRot3 rotGoal;
 
         ProcessQueuedEvents();
 
@@ -241,16 +243,19 @@ public:
 
                 case 'M':   // position move Cartesian
                     GetCartesianPose(cartposSet, false);
-                    if (cartposSet.GetMask().Any()) {
+                    if (cartposSet.Mask().Any()) {
                         if (!m_setpoint_cp.Valid()) {
                             // Old versions of controller do not provide the target Cartesian
                             // position, so we instead use the measured position for elements
                             // that were not specified. In the future, this could be handled
                             // by mtsUniversalRobotScriptRT.
-                            if (!cartposSet.GetMask()[0])
-                                cartposSet.SetGoal(m_measured_cp.Position().Translation());
-                            if (!cartposSet.GetMask()[1])
-                                cartposSet.SetGoal(m_measured_cp.Position().Rotation());
+                            posGoal = cartposSet.Goal().Translation();
+                            rotGoal = cartposSet.Goal().Rotation();
+                            if (!cartposSet.Mask()[0])
+                                posGoal = m_measured_cp.Position().Translation();
+                            if (!cartposSet.Mask()[1])
+                                rotGoal = m_measured_cp.Position().Rotation();
+                            cartposSet.SetGoal(vctFrm3(rotGoal, posGoal));
                         }
                         move_cp(cartposSet);
                     }
@@ -330,7 +335,7 @@ public:
                         std::cout << std::endl
                                   << "Relative Cartesian motion not yet supported on CB2" << std::endl;
                     }
-                    else if (cartposSet.GetMask().Any())
+                    else if (cartposSet.Mask().Any())
                         move_cr(cartposSet);
                     break;
 
@@ -418,9 +423,9 @@ void UniversalRobotClient::GetCartesianPose(prmPositionCartesianSet &cartposSet,
     std::cin >> cartPos[0] >> cartPos[1] >> cartPos[2];
     if (std::cin.good()) {
         cartPos.Divide(1000.0);  // convert from mm to m
-        cartposSet.SetGoal(cartPos);
     }
     else {
+        cartPos = cartposSet.Goal().Translation();
         std::cout << "Skipping position" << std::endl;
         std::cin.clear();
         std::cin.ignore(100, '\n');
@@ -446,13 +451,14 @@ void UniversalRobotClient::GetCartesianPose(prmPositionCartesianSet &cartposSet,
             vctEulerZYXRotation3 rotGoalAbs(cartVec);
             cartRot.From(rotGoalAbs);
         }
-        cartposSet.SetGoal(cartRot);
     }
     else {
+        cartRot = cartposSet.Goal().Rotation();
         std::cout << "Skipping orientation" << std::endl;
         std::cin.clear();
         std::cin.ignore(100, '\n');
     }
+    cartposSet.SetGoal(vctFrm3(cartRot, cartPos));
 }
 
 int main(int argc, char **argv)
