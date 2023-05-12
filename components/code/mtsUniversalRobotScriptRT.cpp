@@ -114,8 +114,14 @@ struct packet_35_39 : packet_32_34 {
 #pragma pack(pop)
 
 #pragma pack(push, 1)
-struct packet_310_311 : packet_35_39 {
+struct packet_310_313 : packet_35_39 {
     double safety_status;
+};
+#pragma pack(pop)
+
+#pragma pack(push, 1)
+struct packet_314_315 : packet_310_313 {
+    double ur_reserved[3];   // Used by Universal Robots software only
 };
 #pragma pack(pop)
 
@@ -128,7 +134,8 @@ unsigned long mtsUniversalRobotScriptRT::PacketLength[VER_MAX] = {
     1044,  // VER_30_31
     1060,  // VER_32_34
     1108,  // VER_35_39
-    1116   // VER_310_311
+    1116,  // VER_310_313
+    1140   // VER_314_315
 };
 
 
@@ -151,7 +158,7 @@ std::string mtsUniversalRobotScriptRT::RobotModeName(int mode, int version)
         else
             str.assign("INVALID");
     }
-    else if ((version >= VER_30_31) && (version <= VER_310_311)) {
+    else if ((version >= VER_30_31) && (version <= VER_314_315)) {
         // Controller Box 3 (CB3), also includes CB3.1
         if ((mode >= ROBOT_MODE_DISCONNECTED) && (mode <= ROBOT_MODE_UPDATING_FIRMWARE))
             str.assign(namesCB3[mode]);
