@@ -100,6 +100,7 @@ struct packet_30_31 {
 #pragma pack(pop)
 
 #pragma pack(push, 1)
+// Versions 3.2-3.4
 struct packet_32_34 : packet_30_31 {
     unsigned long long digital_Output; // Digital outputs
     double program_State;     // Program state
@@ -107,20 +108,23 @@ struct packet_32_34 : packet_30_31 {
 #pragma pack(pop)
 
 #pragma pack(push, 1)
-struct packet_35_39 : packet_32_34 {
+// Versions 3.5-3.9 and 5.0-5.3
+struct packet_35_39_50_53 : packet_32_34 {
     double elbow_position[3];
     double elbow_velocity[3];
 };
 #pragma pack(pop)
 
 #pragma pack(push, 1)
-struct packet_310_313 : packet_35_39 {
+// Versions 3.10-3.13 and 5.4-5.8
+struct packet_310_313_54_58 : packet_35_39_50_53 {
     double safety_status;
 };
 #pragma pack(pop)
 
 #pragma pack(push, 1)
-struct packet_314_315 : packet_310_313 {
+// Versions 3.14-3.15
+struct packet_314_315 : packet_310_313_54_58 {
     double blank5[3];   // Used by Universal Robots software only
 };
 #pragma pack(pop)
