@@ -4,7 +4,7 @@
 /*
   Author(s): Peter Kazanzides, H. Tutkun Sen, Shuyang Chen
 
-  (C) Copyright 2016-2022 Johns Hopkins University (JHU), All Rights Reserved.
+  (C) Copyright 2016-2023 Johns Hopkins University (JHU), All Rights Reserved.
 
 --- begin cisst license - do not edit ---
 
@@ -121,7 +121,7 @@ struct packet_310_313 : packet_35_39 {
 
 #pragma pack(push, 1)
 struct packet_314_315 : packet_310_313 {
-    double ur_reserved[3];   // Used by Universal Robots software only
+    double blank5[3];   // Used by Universal Robots software only
 };
 #pragma pack(pop)
 
@@ -133,9 +133,13 @@ unsigned long mtsUniversalRobotScriptRT::PacketLength[VER_MAX] = {
      812,  // VER_18
     1044,  // VER_30_31
     1060,  // VER_32_34
-    1108,  // VER_35_39
-    1116,  // VER_310_313
-    1140   // VER_314_315
+    1108,  // VER_35_39 (or VER_50_53)
+    1116,  // VER_310_313 (or VER_54_58)
+    1140,  // VER_314_315
+       0,  // VER_3_NEW
+    1108,  // VER_50_53
+    1116,  // VER_54_58
+       0   // VER_5_NEW
 };
 
 
@@ -158,8 +162,8 @@ std::string mtsUniversalRobotScriptRT::RobotModeName(int mode, int version)
         else
             str.assign("INVALID");
     }
-    else if ((version >= VER_30_31) && (version <= VER_314_315)) {
-        // Controller Box 3 (CB3), also includes CB3.1
+    else if ((version >= VER_30_31) && (version < VER_MAX)) {
+        // Controller Box 3 (CB3), also includes CB3.1, and 5 (e-Series)
         if ((mode >= ROBOT_MODE_DISCONNECTED) && (mode <= ROBOT_MODE_UPDATING_FIRMWARE))
             str.assign(namesCB3[mode]);
         else
@@ -241,6 +245,11 @@ void mtsUniversalRobotScriptRT::Init(void)
     isSecurityStop = false;
     isMotionActive = false;
 
+    pversion.major = 0;
+    pversion.minor = 0;
+    pversion.bugfix = 0;
+
+    expectedPeriod = 0.008;   // Default for CB2/CB3
 
     // Joint Configuration
     m_configuration_j.Name().SetSize(NB_Actuators);
@@ -402,9 +411,6 @@ void mtsUniversalRobotScriptRT::Configure(const std::string &ipAddr)
             CMN_LOG_CLASS_INIT_ERROR << "Socket not connected to dashboard server" << std::endl;
         }
     }
-
-//    std::string pver;
-//    GetPolyscopeVersion(pver);
 }
 
 void mtsUniversalRobotScriptRT::Startup(void)
@@ -416,9 +422,7 @@ void mtsUniversalRobotScriptRT::Startup(void)
     } else {
         mInterface->SendError(this->GetName() + ": socket not connected, IP: " + ipAddress);
     }
-
-//    std::string pver;
-//    GetPolyscopeVersion(pver);
+    GetPolyscopeVersion();
 }
 
 void mtsUniversalRobotScriptRT::Run(void)
@@ -451,7 +455,7 @@ void mtsUniversalRobotScriptRT::Run(void)
         // Call any connected components
         RunEvent();
         ProcessQueuedCommands();
-        this->Sleep(0.008 * cmn_s);
+        this->Sleep(expectedPeriod * cmn_s);
         return;
     }
 
@@ -501,7 +505,17 @@ void mtsUniversalRobotScriptRT::Run(void)
         // we are communicating with, we keep checking in case we made a mistake. This also
         // collects useful debug data.
         int i;
-        for (i = VER_UNKNOWN+1; i < VER_MAX; i++) {
+        int vStart = VER_PRE_18;
+        int vEnd = VER_MAX;
+        if (pversion.major == 3) {
+            vStart = VER_30_31;
+            vEnd = VER_3_NEW;
+        }
+        else if (pversion.major == 5) {
+            vStart = VER_50_53;
+            vEnd = VER_5_NEW;
+        }
+        for (i = vStart; i < vEnd; i++) {
             if (packageLength == PacketLength[i]) {
                 PacketCount[i]++;
                 if (version == VER_UNKNOWN)
@@ -514,12 +528,29 @@ void mtsUniversalRobotScriptRT::Run(void)
                         version = static_cast<FirmwareVersion>(i);
                     }
                 }
+                // Expected period is 0.008 sec (125 Hz) for CB2/CB3 and
+                // 0.002 (500 Hz) for e-Series
+                expectedPeriod = (version < VER_50_53) ? 0.008 : 0.002;
                 break;
             }
         }
-        // If we didn't find a match above, increment the VER_UNKNOWN packet counter
-        if (i == VER_MAX)
+        if ((i == VER_3_NEW) || (i == VER_5_NEW)) {
+            if (PacketLength[i] == 0) {
+                CMN_LOG_CLASS_RUN_WARNING << "Found new version, packet length = "
+                                          << packageLength << ", polyscope version = "
+                                          << GetPolyscopeVersionString() << std::endl;
+            }
+            else if (packageLength != PacketLength[i]) {
+                CMN_LOG_CLASS_RUN_WARNING << "Switching new version packet length from "
+                                          << PacketLength[i] << " to "
+                                          << packageLength << std::endl;
+            }
+            PacketLength[i] = packageLength;
+        }
+        else if (i == VER_MAX) {
+            // If we didn't find a match above, increment the VER_UNKNOWN packet counter
             PacketCount[VER_UNKNOWN]++;
+        }
         if (version != VER_UNKNOWN) {
             if (packageLength < PacketLength[version]) {
                 debug[2] += 1;
@@ -532,14 +563,15 @@ void mtsUniversalRobotScriptRT::Run(void)
             // Following is valid for all versions
             module1 *base1 = reinterpret_cast<module1 *>(buffer);
             // First, do a sanity check on the packet. The new ControllerTime (base1->time)
-            // should be about 0.008 seconds later than the previous value.
+            // should be about 0.008 seconds (CB2/CB3) or 0.002 seconds (e-Series) later than
+            // the previous value.
             double timeDiff = base1->time - ControllerTime;
             debug[0] = 1000.0*timeDiff;
-            if (timeCheckEnabled && ((timeDiff < 0.004) || (timeDiff > 0.024))) {
+            if (timeCheckEnabled && ((timeDiff < (expectedPeriod/2)) || (timeDiff > (3*expectedPeriod)))) {
                 // Could create a different event
                 PacketInvalid(vctULong2(numBytes, packageLength));
                 // Try to recover next time
-                ControllerTime += 0.008;
+                ControllerTime += expectedPeriod;
             }
             else {
                 ControllerTime = base1->time;
@@ -736,15 +768,12 @@ void mtsUniversalRobotScriptRT::Run(void)
 
     // Check for any responses via Dashboard server
     if (socketDBconnected) {
-        char bufferDB[128];
-        int nBytes = socketDB.Receive(bufferDB, sizeof(bufferDB));
-        if (nBytes > 0) {
-            bufferDB[nBytes-1] = 0;  // Remove last character (newline)
-            mInterface->SendStatus(this->GetName() + "-DashboardServer: " + std::string(bufferDB));
+        std::string response;
+        if (RecvFromDashboardServer(response)) {
+            mInterface->SendStatus(this->GetName() + "-DashboardServer: " + response);
         }
     }
 }
-
 
 void mtsUniversalRobotScriptRT::Cleanup(void)
 {
@@ -771,13 +800,17 @@ void mtsUniversalRobotScriptRT::ReceiveTimeout(void)
 
 bool mtsUniversalRobotScriptRT::SendAndReceiveDB(const std::string &cmd, std::string &recv)
 {
-    char buf[100];
+    // First, flush any existing responses
+    std::string response;
+    while (RecvFromDashboardServer(response)) {
+        mInterface->SendStatus(this->GetName() + "-DashboardServer: " + response);
+    }
+    // Now, send command
     if (socketDB.Send(cmd) < 0) return false;
-    this->Sleep(0.1);   // wait for reply
-    if (socketDB.Receive(buf, 100) < 0) return false;
-
-    recv = buf;
-    return true;
+    // Wait for reply
+    this->Sleep(0.1);
+    // Receive response
+    return RecvFromDashboardServer(recv);
 }
 
 void mtsUniversalRobotScriptRT::SetRobotFreeDriveMode(void)
@@ -1095,10 +1128,47 @@ void mtsUniversalRobotScriptRT::SendToDashboardServer(const std::string &msg)
         SocketError();
 }
 
-void mtsUniversalRobotScriptRT::GetPolyscopeVersion(std::string &pver)
+bool mtsUniversalRobotScriptRT::RecvFromDashboardServer(std::string &resp)
 {
-    SendAndReceiveDB("PolyscopeVersion\n", pver);
+    char bufferDB[128];
+    int nBytes = socketDB.Receive(bufferDB, sizeof(bufferDB));
+    if (nBytes > 0) {
+        bufferDB[nBytes-1] = 0;  // Remove last character (newline)
+        resp.assign(bufferDB);
+    }
+    return (nBytes > 0);
+}
 
+bool mtsUniversalRobotScriptRT::GetPolyscopeVersion(void)
+{
+    std::string pver;
+    if (!SendAndReceiveDB("PolyscopeVersion\n", pver))
+        return false;
+
+    // According to CB series manual, command has been available since
+    // version 1.8 and response has following format:
+    //   "3.0.15547"
+    // According to e-Series manual, response has following format:
+    //   "URSoftware 5.12.0.1101319 (Mar 22 2022)"
+    CMN_LOG_CLASS_RUN_WARNING << "GetPolyscopeVersion: [" << pver << "]" << std::endl;
+    // First, check for "URSoftware " string
+    std::string compareStr("URSoftware ");
+    if (pver.compare(0, compareStr.size(), compareStr)) {
+        CMN_LOG_CLASS_RUN_WARNING << "GetPolyscopeVersion: found " << compareStr << std::endl;
+        pver.erase(0, compareStr.size());
+    }
+#if 1
+    // sscanf version
+    int n = sscanf(pver.c_str(), "%d.%d.%d", &pversion.major, &pversion.minor, &pversion.bugfix);
+    if (n != 3) {
+        CMN_LOG_CLASS_RUN_WARNING << "GetPolyscopeVersion: failed to parse version from " << pver << std::endl;
+        return false;
+    }
+    CMN_LOG_CLASS_RUN_WARNING << "GetPolyscopeVersion: version = " << pversion.major << "."
+                              << pversion.minor << "." << pversion.bugfix << std::endl;
+    return true;
+#else
+    // std::string version
     std::vector<std::string> strings;
     std::string s;
     std::istringstream f(pver);
@@ -1116,4 +1186,12 @@ void mtsUniversalRobotScriptRT::GetPolyscopeVersion(std::string &pver)
         pversion.bugfix = atoi(strings[2].c_str());
         std::cout << "major = " << strings[0].c_str() << "  minor = " << strings[1] << "  bugfix = " << strings[2] << "\n";
     }
+#endif
+}
+
+std::string mtsUniversalRobotScriptRT::GetPolyscopeVersionString(void)
+{
+    std::ostringstream resp;
+    resp << pversion.major << "." << pversion.minor << "." << pversion.bugfix;
+    return resp.str();
 }

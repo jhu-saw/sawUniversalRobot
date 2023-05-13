@@ -4,7 +4,7 @@
 /*
   Author(s): Peter Kazanzides, H. Tutkun Sen, Shuyang Chen
 
-  (C) Copyright 2016-2020 Johns Hopkins University (JHU), All Rights Reserved.
+  (C) Copyright 2016-2023 Johns Hopkins University (JHU), All Rights Reserved.
 
 --- begin cisst license - do not edit ---
 
@@ -106,7 +106,7 @@ protected:
     mtsStateTable ConfigurationStateTable;
 
     // This buffer must be large enough for largest packet size.
-    // According to documentation, port 30003 packets are up to 1060 bytes (Version 3.2)
+    // According to documentation, port 30003 packets are up to 1140 bytes (Version 3.15)
     // (On port 30001, have seen packets as large as 1295 bytes).
     // We keep it less than twice the minimum packet length (764 bytes) so that we cannot
     // accumulate more than one complete packet in the buffer.
@@ -118,6 +118,9 @@ protected:
         int minor;
         int bugfix;
     } pversion;
+
+    // Expected period (0.008 for CB2/CB3, 0.002 for e-Series)
+    double expectedPeriod;
 
     // State table entries
     double ControllerTime;
@@ -155,7 +158,7 @@ protected:
 
     // For UR version determination
     enum FirmwareVersion {VER_UNKNOWN, VER_PRE_18, VER_18, VER_30_31, VER_32_34, VER_35_39, VER_310_313,
-                          VER_314_315, VER_MAX};
+                          VER_314_315, VER_3_NEW, VER_50_53, VER_54_58, VER_5_NEW, VER_MAX};
     FirmwareVersion version;
     static unsigned long PacketLength[VER_MAX];
     unsigned long PacketCount[VER_MAX];
@@ -226,7 +229,16 @@ protected:
     // Send command to Dashboard Server
     void SendToDashboardServer(const std::string &msg);
 
-    void GetPolyscopeVersion(std::string &pver);
+    // Receive response from Dashboard Server
+    bool RecvFromDashboardServer(std::string &resp);
+
+    // Reads Polyscope version from Dashboard Server and stores
+    // result in class
+    bool GetPolyscopeVersion(void);
+
+    // Returns formatted string based on Polyscope version previously
+    // obtained from Dashboard Server.
+    std::string GetPolyscopeVersionString(void);
 
     // Connection Parameters
     // IP address (TCP/IP)
