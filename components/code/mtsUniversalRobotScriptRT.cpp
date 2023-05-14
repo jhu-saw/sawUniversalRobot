@@ -101,7 +101,7 @@ struct packet_30_31 {
 
 #pragma pack(push, 1)
 // Versions 3.2-3.4
-struct packet_32_34 : packet_30_31 {
+struct packet_32_34 : public packet_30_31 {
     unsigned long long digital_Output; // Digital outputs
     double program_State;     // Program state
 };
@@ -109,7 +109,7 @@ struct packet_32_34 : packet_30_31 {
 
 #pragma pack(push, 1)
 // Versions 3.5-3.9 and 5.0-5.3
-struct packet_35_39_50_53 : packet_32_34 {
+struct packet_35_39_50_53 : public packet_32_34 {
     double elbow_position[3];
     double elbow_velocity[3];
 };
@@ -117,15 +117,24 @@ struct packet_35_39_50_53 : packet_32_34 {
 
 #pragma pack(push, 1)
 // Versions 3.10-3.13 and 5.4-5.8
-struct packet_310_313_54_58 : packet_35_39_50_53 {
+struct packet_310_313_54_58 : public packet_35_39_50_53 {
     double safety_status;
 };
 #pragma pack(pop)
 
 #pragma pack(push, 1)
-// Versions 3.14-3.15
-struct packet_314_315 : packet_310_313_54_58 {
+// Versions 3.14-3.15 and 5.9
+struct packet_314_315_59 : public packet_310_313_54_58 {
     double blank5[3];   // Used by Universal Robots software only
+};
+#pragma pack(pop)
+
+#pragma pack(push, 1)
+// Version 5.10
+struct packet_510 : public packet_314_315_59 {
+    double payload_mass;        // payload mass, kg
+    double payload_cog[3];      // payload center of gravity, m
+    double payload_inertia[6];  // Ixx, Iyy, Izz, Ixy, Ixz, Iyz, kg*m^2
 };
 #pragma pack(pop)
 
@@ -137,12 +146,14 @@ unsigned long mtsUniversalRobotScriptRT::PacketLength[VER_MAX] = {
      812,  // VER_18
     1044,  // VER_30_31
     1060,  // VER_32_34
-    1108,  // VER_35_39 (or VER_50_53)
+    1108,  // VER_35_39   (or VER_50_53)
     1116,  // VER_310_313 (or VER_54_58)
-    1140,  // VER_314_315
+    1140,  // VER_314_315 (or VER_59)
        0,  // VER_3_NEW
     1108,  // VER_50_53
     1116,  // VER_54_58
+    1140,  // VER_59
+    1220,  // VER_510
        0   // VER_5_NEW
 };
 
