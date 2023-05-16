@@ -2,7 +2,7 @@
 /*ex: set filetype=cpp softtabstop=4 shiftwidth=4 tabstop=4 cindent expandtab:*/
 
 /*
-(C) Copyright 2016-2022 Johns Hopkins University (JHU), All Rights Reserved.
+(C) Copyright 2016-2023 Johns Hopkins University (JHU), All Rights Reserved.
 
 --- begin cisst license - do not edit ---
 
@@ -47,6 +47,7 @@ private:
     mtsFunctionRead setpoint_cp;
     mtsFunctionRead GetConnected;
     mtsFunctionRead GetVersion;
+    mtsFunctionRead GetVersionString;
     mtsFunctionRead GetAveragePeriod;
     mtsFunctionWrite move_jp;
     mtsFunctionWrite move_cp;
@@ -125,6 +126,7 @@ public:
             req->AddFunction("ShowPopup", ShowPopup);
             req->AddFunction("SendToDashboardServer", SendToDashboardServer);
             req->AddFunction("GetVersion", GetVersion);
+            req->AddFunction("GetVersionString", GetVersionString);
             req->AddFunction("GetRobotMode", GetRobotMode, MTS_OPTIONAL);
             req->AddFunction("GetJointModes", GetJointModes, MTS_OPTIONAL);
             req->AddFunction("GetSafetyMode", GetSafetyMode, MTS_OPTIONAL);
@@ -190,11 +192,11 @@ public:
         double payload;
         int toolVoltage;
         int version;
+        std::string versionString;
         int robotMode;
         vctInt6 jointModes;
         int safetyMode;
         bool flag;
-        const char *versionString[] = { "Unknown", "Pre-1.8", "1.8", "3.0-3.1", "3.2-3.4", "3.5-3.9", "3.10-3.11" };
         size_t i;
         vct3 posGoal;
         vctDoubleRot3 rotGoal;
@@ -313,11 +315,8 @@ public:
                     break;
 
                 case 'x':   // get version
-                    GetVersion(version);
-                    if ((version < 0) || (version >= sizeof(versionString)/sizeof(versionString[0])))
-                        std::cout << std::endl << "Firmware version, invalid response = " << version << std::endl;
-                    else
-                        std:: cout << std::endl << "Firmware version: " << versionString[version] << std::endl;
+                    GetVersionString(versionString);
+                    std:: cout << std::endl << "Firmware version: " << versionString << std::endl;
                     break;
 
                 case 'f':   // free drive mode

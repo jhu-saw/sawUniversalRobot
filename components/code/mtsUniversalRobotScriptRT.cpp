@@ -157,7 +157,22 @@ unsigned long mtsUniversalRobotScriptRT::PacketLength[VER_MAX] = {
        0   // VER_5_NEW
 };
 
-
+char *mtsUniversalRobotScriptRT::VersionName[VER_MAX] = {
+    "Unknown",
+    "Pre-1.8",
+    "1.8",
+    "3.0-3.1",
+    "3.2-3.4",
+    "3.5-3.9",
+    "3.10-3.13",
+    "3.14-3.15",
+    "3.+",
+    "5.0-5.3",
+    "5.4-5.8",
+    "5.9",
+    "5.10",
+    "5.+"
+};
 // Static methods
 std::string mtsUniversalRobotScriptRT::RobotModeName(int mode, int version)
 {
@@ -376,6 +391,7 @@ void mtsUniversalRobotScriptRT::Init(void)
         mInterface->AddCommandVoid(&mtsUniversalRobotScriptRT::SetRobotFreeDriveMode, this, "SetRobotFreeDriveMode");
         mInterface->AddCommandReadState(StateTable, debug, "GetDebug");
         mInterface->AddCommandRead(&mtsUniversalRobotScriptRT::GetVersion, this, "GetVersion");
+        mInterface->AddCommandRead(&mtsUniversalRobotScriptRT::GetVersionString, this, "GetVersionString");
         mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::SetGravity, this, "SetGravity");
         mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::SetPayload, this, "SetPayload");
         mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::SetToolFrame, this, "SetToolFrame");
@@ -437,7 +453,7 @@ void mtsUniversalRobotScriptRT::Startup(void)
     } else {
         mInterface->SendError(this->GetName() + ": socket not connected, IP: " + ipAddress);
     }
-    GetPolyscopeVersion();
+    ReadPolyscopeVersion();
 }
 
 void mtsUniversalRobotScriptRT::Run(void)
@@ -1075,6 +1091,21 @@ void mtsUniversalRobotScriptRT::StopMotion(void)
     }
 }
 
+// Returns version detected from packet length (which is often a range of versions),
+// followed by Polyscope version in parentheses.
+void mtsUniversalRobotScriptRT::GetVersionString(std::string &str) const
+{
+    if (version < VER_MAX)
+        str.assign(VersionName[version]);
+    else
+        str.assign("Invalid");
+    if (pversion.major != 0) {
+        str.append(" (");
+        str.append(GetPolyscopeVersionString());
+        str.append(")");
+    }
+}
+
 // Set the gravity vector; in the script manual, this appears to be multiplied by "g" (9.82)
 // rather than being a unit vector.
 void mtsUniversalRobotScriptRT::SetGravity(const vct3 &gravity)
@@ -1154,57 +1185,43 @@ bool mtsUniversalRobotScriptRT::RecvFromDashboardServer(std::string &resp)
     return (nBytes > 0);
 }
 
-bool mtsUniversalRobotScriptRT::GetPolyscopeVersion(void)
+bool mtsUniversalRobotScriptRT::ReadPolyscopeVersion(void)
 {
     std::string pver;
     if (!SendAndReceiveDB("PolyscopeVersion\n", pver))
         return false;
 
-    // According to CB series manual, command has been available since
-    // version 1.8 and response has following format:
-    //   "3.0.15547"
     // According to e-Series manual, response has following format:
     //   "URSoftware 5.12.0.1101319 (Mar 22 2022)"
-    CMN_LOG_CLASS_RUN_WARNING << "GetPolyscopeVersion: [" << pver << "]" << std::endl;
-    // First, check for "URSoftware " string
-    std::string compareStr("URSoftware ");
-    if (pver.compare(0, compareStr.size(), compareStr)) {
-        CMN_LOG_CLASS_RUN_WARNING << "GetPolyscopeVersion: found " << compareStr << std::endl;
-        pver.erase(0, compareStr.size());
-    }
-#if 1
-    // sscanf version
-    int n = sscanf(pver.c_str(), "%d.%d.%d", &pversion.major, &pversion.minor, &pversion.bugfix);
-    if (n != 3) {
-        CMN_LOG_CLASS_RUN_WARNING << "GetPolyscopeVersion: failed to parse version from " << pver << std::endl;
-        return false;
-    }
-    CMN_LOG_CLASS_RUN_WARNING << "GetPolyscopeVersion: version = " << pversion.major << "."
-                              << pversion.minor << "." << pversion.bugfix << std::endl;
-    return true;
-#else
-    // std::string version
-    std::vector<std::string> strings;
-    std::string s;
-    std::istringstream f(pver);
-    while (getline(f, s, '.')) {
-        strings.push_back(s);
-    }
+    // According to CB series manual, command has been available since
+    // version 1.8 and response has following format: "3.0.15547", but
+    // at least some CB3 series controllers return the longer message,
+    // e.g., "URSoftware 3.12.0.90886 (Nov 15 2019)"
+    CMN_LOG_CLASS_RUN_VERBOSE << "ReadPolyscopeVersion: " << pver << std::endl;
 
-    if (strings.size() != 3) {
-        std::cerr << "invalid version\n";
+    // First, check for "URSoftware " string and advance past it if found
+    std::string compareStr("URSoftware ");
+    size_t offset = 0;
+    if (pver.compare(0, compareStr.size(), compareStr) == 0)
+        offset = compareStr.size();
+
+    // Using sscanf instead of std::string and/or std::stringstream to parse version string
+    int major, minor, bugfix;
+    int n = sscanf(pver.c_str()+offset, "%d.%d.%d", &major, &minor, &bugfix);
+    if (n == 3) {
+        pversion.major = major;
+        pversion.minor = minor;
+        pversion.bugfix = bugfix;
+        CMN_LOG_CLASS_RUN_WARNING << "ReadPolyscopeVersion: version = "
+                                  << GetPolyscopeVersionString() << std::endl;
     }
     else {
-        // FIXME: major in string is 3, however atoi returns 0
-        pversion.major = atoi(strings[0].c_str());
-        pversion.minor = atoi(strings[1].c_str());
-        pversion.bugfix = atoi(strings[2].c_str());
-        std::cout << "major = " << strings[0].c_str() << "  minor = " << strings[1] << "  bugfix = " << strings[2] << "\n";
+        CMN_LOG_CLASS_RUN_WARNING << "ReadPolyscopeVersion: failed to parse version from " << pver << std::endl;
     }
-#endif
+    return (n == 3);
 }
 
-std::string mtsUniversalRobotScriptRT::GetPolyscopeVersionString(void)
+std::string mtsUniversalRobotScriptRT::GetPolyscopeVersionString(void) const
 {
     std::ostringstream resp;
     resp << pversion.major << "." << pversion.minor << "." << pversion.bugfix;

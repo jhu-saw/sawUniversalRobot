@@ -160,6 +160,7 @@ protected:
     enum FirmwareVersion {VER_UNKNOWN, VER_PRE_18, VER_18, VER_30_31, VER_32_34, VER_35_39, VER_310_313,
                           VER_314_315, VER_3_NEW, VER_50_53, VER_54_58, VER_59, VER_510, VER_5_NEW, VER_MAX};
     FirmwareVersion version;
+    static char *VersionName[VER_MAX];
     static unsigned long PacketLength[VER_MAX];
     unsigned long PacketCount[VER_MAX];
 
@@ -210,6 +211,8 @@ protected:
         ver = static_cast<int>(version);
     }
 
+    void GetVersionString(std::string &str) const;
+
     // Set the gravity vector
     void SetGravity(const vct3 &gravity);
 
@@ -234,11 +237,11 @@ protected:
 
     // Reads Polyscope version from Dashboard Server and stores
     // result in class
-    bool GetPolyscopeVersion(void);
+    bool ReadPolyscopeVersion(void);
 
     // Returns formatted string based on Polyscope version previously
     // obtained from Dashboard Server.
-    std::string GetPolyscopeVersionString(void);
+    std::string GetPolyscopeVersionString(void) const;
 
     // Connection Parameters
     // IP address (TCP/IP)
