@@ -62,6 +62,7 @@ private:
     mtsFunctionRead GetRobotMode;
     mtsFunctionRead GetJointModes;
     mtsFunctionRead GetSafetyMode;
+    mtsFunctionRead GetPayload;
     mtsFunctionRead IsMotorPowerOn;
     mtsFunctionRead IsEStop;
     mtsFunctionVoid SetRobotFreeDriveMode;
@@ -130,6 +131,7 @@ public:
             req->AddFunction("GetRobotMode", GetRobotMode, MTS_OPTIONAL);
             req->AddFunction("GetJointModes", GetJointModes, MTS_OPTIONAL);
             req->AddFunction("GetSafetyMode", GetSafetyMode, MTS_OPTIONAL);
+            req->AddFunction("GetPayload", GetPayload);
             req->AddFunction("IsMotorPowerOn", IsMotorPowerOn);
             req->AddFunction("IsEStop", IsEStop);
             req->AddFunction("SetRobotFreeDriveMode", SetRobotFreeDriveMode);
@@ -299,7 +301,9 @@ public:
                     break;
 
                 case 'p':
-                    std::cout << std::endl << "Enter payload (kg): ";
+                    GetPayload(payload);
+                    std::cout << std::endl << "Current payload (kg): " << payload << std::endl;
+                    std::cout << "Enter new payload (kg): ";
                     std::cin >> payload;
                     SetPayload(payload);
                     break;
@@ -368,6 +372,8 @@ public:
                         std::cout << "Emergency stop is pressed" << std::endl;
                     else
                         std::cout << "Emergency stop is not pressed" << std::endl;
+                    GetPayload(payload);
+                    std::cout << "Payload (kg): " << payload << std::endl;
                     break;
 
                 case 'e':   // enable motor power

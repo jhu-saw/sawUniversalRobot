@@ -275,6 +275,7 @@ void mtsUniversalRobotScriptRT::Init(void)
     robotMode = ROBOT_MODE_NO_CONTROLLER;
     jointModes.SetAll(0);  // Not a valid joint mode
     safetyMode = SAFETY_MODE_UNKNOWN;
+    payload = 0.0;
     isPowerOn = false;
     isEStop = false;
     isSecurityStop = false;
@@ -329,6 +330,7 @@ void mtsUniversalRobotScriptRT::Init(void)
     StateTable.AddData(robotMode, "RobotMode");
     StateTable.AddData(jointModes, "JointModes");
     StateTable.AddData(safetyMode, "SafetyMode");
+    StateTable.AddData(payload, "Payload");
     StateTable.AddData(isPowerOn, "IsPowerOn");
     StateTable.AddData(isEStop, "IsEStop");
     StateTable.AddData(isSecurityStop, "IsSecurityStop");
@@ -382,6 +384,7 @@ void mtsUniversalRobotScriptRT::Init(void)
         mInterface->AddCommandReadState(StateTable, robotMode, "GetRobotMode");
         mInterface->AddCommandReadState(StateTable, jointModes, "GetJointModes");
         mInterface->AddCommandReadState(StateTable, safetyMode, "GetSafetyMode");
+        mInterface->AddCommandReadState(StateTable, payload, "GetPayload");
         mInterface->AddCommandReadState(StateTable, isPowerOn, "IsMotorPowerOn");
         mInterface->AddCommandReadState(StateTable, isEStop, "IsEStop");
         mInterface->AddCommandReadState(StateTable, isSecurityStop, "IsSecurityStop");
@@ -694,6 +697,10 @@ void mtsUniversalRobotScriptRT::Run(void)
                 // Target Cartesian velocity
                 m_setpoint_cv.SetVelocity(vct6(packet->TCP_speed_Tar));
                 m_setpoint_cv.SetValid(true);
+                if (version >= VER_510) {
+                    packet_510 *packet = (packet_510 *)(buffer);
+                    payload = packet->payload_mass;
+                }
             }
             if (tool_vec) {
                 vct3 position(tool_vec);
@@ -1132,6 +1139,9 @@ void mtsUniversalRobotScriptRT::SetPayload(const double &mass_kg)
     sprintf(buf, "set_payload(%8.3lf)\n", mass_kg);
     if (socket.Send(buf) == -1)
         SocketError();
+    // Update the state table. Starting with Ver 5.10, the payload is returned via
+    // the interface, which will overwrite this setting.
+    payload = mass_kg;
 }
 
 // Set transformation from output flange to TCP

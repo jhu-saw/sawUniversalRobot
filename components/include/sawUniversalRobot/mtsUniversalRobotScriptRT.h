@@ -138,6 +138,7 @@ protected:
     int robotMode;
     vctInt6 jointModes;
     int safetyMode;
+    double payload;    // payload mass in kg
     bool isPowerOn;
     bool isEStop;
     bool isSecurityStop;
@@ -228,6 +229,10 @@ protected:
 
     // Set payload mass (kg). Robot can also accept a 3-vector
     // for the center of mass.
+    // The payload can be read by GetPayload, but note that for
+    // Versions prior to 5.10, this just returns the last value
+    // written by SetPayload (i.e., it is not aware of any payload
+    // changes made outside this interface).
     void SetPayload(const double &mass_kg);
 
     // Set transformation from output flange to TCP
