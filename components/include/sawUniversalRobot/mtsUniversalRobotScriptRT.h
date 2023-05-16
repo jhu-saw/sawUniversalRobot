@@ -63,37 +63,47 @@ public:
     // JointModes available starting with firmware version 1.8. Some of these definitions are not
     // documented in the script interface (Client_Interface.xlsx), but were instead obtained from
     // the C API (microprocessor_commands.h) for Version 1.8.
-    enum JointModes { JOINT_SHUTTING_DOWN_MODE = 236,          // Not in C API
-                      JOINT_PART_D_CALIBRATION_MODE = 237,
-                      JOINT_BACKDRIVE_MODE = 238,
-                      JOINT_POWER_OFF_MODE = 239,
-                      JOINT_EMERGENCY_STOPPED_MODE = 240,      // C API
-                      JOINT_CALVAL_INITIALIZATION_MODE = 241,  // C API
-                      JOINT_ERROR_MODE = 242,                  // C API
-                      JOINT_FREEDRIVE_MODE = 243,              // C API
-                      JOINT_SIMULATED_MODE = 244,              // C API
-                      JOINT_NOT_RESPONDING_MODE = 245,
-                      JOINT_MOTOR_INITIALISATION_MODE = 246,
-                      JOINT_BOOTING_MODE = 247,
-                      JOINT_PART_D_CALIBRATION_ERROR_MODE = 248,
-                      JOINT_BOOTLOADER_MODE = 249,
-                      JOINT_CALIBRATION_MODE = 250,
-                      JOINT_SECURITY_STOPPED_MODE = 251,
-                      JOINT_FAULT_MODE = 252,
-                      JOINT_RUNNING_MODE = 253,
-                      JOINT_INITIALISATION_MODE = 254,         // C API
-                      JOINT_IDLE_MODE = 255 };
+    // Note that this enum intentionally contains some duplicate values, since there is a single
+    // enum for all versions.
+    enum JointModes { JOINT_MODE_RESET = 235,
+                      JOINT_MODE_SHUTTING_DOWN = 236,
+                      JOINT_PART_D_CALIBRATION_MODE = 237,       // Internal use only
+                      JOINT_MODE_BACKDRIVE = 238,
+                      JOINT_MODE_POWER_OFF = 239,
+                      JOINT_MODE_READY_FOR_POWER_OFF = 240,      // Version 5.1+
+                      JOINT_EMERGENCY_STOPPED_MODE = 240,        // C API
+                      JOINT_CALVAL_INITIALIZATION_MODE = 241,    // C API
+                      JOINT_ERROR_MODE = 242,                    // C API
+                      JOINT_FREEDRIVE_MODE = 243,                // C API
+                      JOINT_SIMULATED_MODE = 244,                // C API
+                      JOINT_MODE_NOT_RESPONDING = 245,
+                      JOINT_MODE_MOTOR_INITIALISATION = 246,
+                      JOINT_MODE_BOOTING = 247,
+                      JOINT_PART_D_CALIBRATION_ERROR_MODE = 248, // Internal use only
+                      JOINT_MODE_BOOTLOADER = 249,
+                      JOINT_CALIBRATION_MODE = 250,              // Internal use only
+                      JOINT_MODE_VIOLATION = 251,
+                      JOINT_SECURITY_STOPPED_MODE = 251,         // Seems to now be called VIOLATION
+                      JOINT_MODE_FAULT = 252,
+                      JOINT_MODE_RUNNING = 253,
+                      JOINT_INITIALISATION_MODE = 254,           // C API
+                      JOINT_MODE_IDLE = 255 };
 
+    static char *JointModeNames[21];
     static std::string JointModeName(int mode);
 
     // SafetyMode is available starting with firmware version 3.0. Since the value of 0 is not used by
     // Universal Robots, we define it to be SAFETY_MODE_UNKNOWN.
+    // e-Series added SAFETY_MODE_VALIDATE_JOINT_ID (10)
+    // Recent documentation added SAFETY_MODE_UNDEFINED_SAFETY_MODE (11)
     enum SafetyModes { SAFETY_MODE_UNKNOWN, SAFETY_MODE_NORMAL, SAFETY_MODE_REDUCED,
                        SAFETY_MODE_PROTECTIVE_STOP, SAFETY_MODE_RECOVERY,
                        SAFETY_MODE_SAFEGUARD_STOP,          // Physical s-stop interface input
                        SAFETY_MODE_SYSTEM_EMERGENCY_STOP,   // Physical e-stop interface input
                        SAFETY_MODE_ROBOT_EMERGENCY_STOP,    // Physical e-stop interface input
-                       SAFETY_MODE_VIOLATION, SAFETY_MODE_FAULT };
+                       SAFETY_MODE_VIOLATION, SAFETY_MODE_FAULT,
+                       SAFETY_MODE_VALIDATE_JOINT_ID,
+                       SAFETY_MODE_UNDEFINED_SAFETY_MODE};
 
     static std::string SafetyModeName(int mode);
 

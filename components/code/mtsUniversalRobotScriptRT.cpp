@@ -173,6 +173,7 @@ char *mtsUniversalRobotScriptRT::VersionName[VER_MAX] = {
     "5.10",
     "5.+"
 };
+
 // Static methods
 std::string mtsUniversalRobotScriptRT::RobotModeName(int mode, int version)
 {
@@ -205,17 +206,21 @@ std::string mtsUniversalRobotScriptRT::RobotModeName(int mode, int version)
     return str;
 }
 
+// Note that "READY_FOR_POWER_OFF" is replaced by "EMERGENCY_STOPPED" for older versions
+// (see Startup method). Previously, "VIOLATION" was called "SECURITY_STOPPED", but this
+// seems to just be a terminology change.
+char *mtsUniversalRobotScriptRT::JointModeNames[21] =
+           { "RESET", "SHUTTING_DOWN", "PART_D_CALIBRATION", "BACKDRIVE", "POWER_OFF",
+             "READY_FOR_POWER_OFF", "CALVAL_INITIALIZATION", "ERROR",
+             "FREEDRIVE", "SIMULATED", "NOT_RESPONDING", "MOTOR_INITIALISATION",
+             "BOOTING", "PART_D_CALIBRATION_ERROR", "BOOTLOADER", "CALIBRATION",
+             "VIOLATION", "FAULT", "RUNNING", "INITIALISATION", "IDLE" };
+
 std::string mtsUniversalRobotScriptRT::JointModeName(int mode)
 {
-    static const char *names[] = { "SHUTTING_DOWN", "PART_D_CALIBRATION", "BACKDRIVE", "POWER_OFF",
-                                   "EMERGENCY_STOPPED", "CALVAL_INITIALIZATION", "ERROR",
-                                   "FREEDRIVE", "SIMULATED", "NOT_RESPONDING", "MOTOR_INITIALISATION",
-                                   "BOOTING", "PART_D_CALIBRATION_ERROR", "BOOTLOADER", "CALIBRATION",
-                                   "SECURITY_STOPPED", "FAULT", "RUNNING", "INITIALISATION", "IDLE" };
-
     std::string str;
-    if ((mode >= JOINT_SHUTTING_DOWN_MODE) && (mode <= JOINT_IDLE_MODE))
-        str.assign(names[mode-JOINT_SHUTTING_DOWN_MODE]);
+    if ((mode >= JOINT_MODE_RESET) && (mode <= JOINT_MODE_IDLE))
+        str.assign(JointModeNames[mode-JOINT_MODE_RESET]);
     else
         str.assign("INVALID");
     return str;
@@ -225,10 +230,10 @@ std::string mtsUniversalRobotScriptRT::SafetyModeName(int mode)
 {
     static const char *names[] = { "UNKNOWN", "NORMAL", "REDUCED", "PROTECTIVE_STOP", "RECOVERY",
                                    "SAFEGUARD_STOP", "SYSTEM_EMERGENCY_STOP", "ROBOT_EMERGENCY_STOP",
-                                   "VIOLATION", "FAULT" };
+                                   "VIOLATION", "FAULT", "VALIDATE_JOINT_ID", "UNDEFINED" };
 
     std::string str;
-    if (mode <= SAFETY_MODE_FAULT)
+    if (mode <= SAFETY_MODE_UNDEFINED_SAFETY_MODE)
         str.assign(names[mode]);
     else
         str.assign("INVALID");
@@ -454,6 +459,9 @@ void mtsUniversalRobotScriptRT::Startup(void)
         mInterface->SendError(this->GetName() + ": socket not connected, IP: " + ipAddress);
     }
     ReadPolyscopeVersion();
+    // JOINT_EMERGENCY_STOPPED_MODE was prior to Version 5.1
+    if ((pversion.major < 5) || ((pversion.major == 5) && (pversion.minor == 0)))
+        JointModeNames[JOINT_EMERGENCY_STOPPED_MODE] = "EMERGENCY_STOPPED";
 }
 
 void mtsUniversalRobotScriptRT::Run(void)
@@ -637,14 +645,14 @@ void mtsUniversalRobotScriptRT::Run(void)
 
             // We use the jointModes rather than robotMode to determine whether power is on because
             // the defined jointModes are consistent between firmware versions, whereas robotMode is not.
-            // For jointModes, power is on if we are RUNNING, FREEDRIVE, INITIALISATION, or SECURITY_STOPPED.
+            // For jointModes, power is on if we are RUNNING, FREEDRIVE, INITIALISATION, or VIOLATION.
             // The following code handles joints in any combination of the above states (e.g., some joints
             // can be in JOINT_INITIALISATION_MODE while the rest of the joints are in JOINT_RUNNING_MODE).
             // Note that in cisstVector, addition is specialized as logical OR for boolean vectors.
-            vctBool6 jointHasPower(jointModes.ElementwiseEqual(JOINT_RUNNING_MODE));
+            vctBool6 jointHasPower(jointModes.ElementwiseEqual(JOINT_MODE_RUNNING));
             jointHasPower.Add(jointModes.ElementwiseEqual(JOINT_FREEDRIVE_MODE));
             jointHasPower.Add(jointModes.ElementwiseEqual(JOINT_INITIALISATION_MODE));
-            jointHasPower.Add(jointModes.ElementwiseEqual(JOINT_SECURITY_STOPPED_MODE));
+            jointHasPower.Add(jointModes.ElementwiseEqual(JOINT_MODE_VIOLATION));
             isPowerOn = jointHasPower.All();
 
             double *tool_vec = 0;
@@ -771,7 +779,7 @@ void mtsUniversalRobotScriptRT::Run(void)
         break;
 
     case UR_POWERING_ON:
-        if (jointModes.Equal(JOINT_IDLE_MODE)) {
+        if (jointModes.Equal(JOINT_MODE_IDLE)) {
             if (version < VER_30_31) {
                 // Seems to be necessary to send another "power on" command
                 // before sending "brake release".
