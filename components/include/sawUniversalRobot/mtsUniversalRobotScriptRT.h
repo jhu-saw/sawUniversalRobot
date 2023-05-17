@@ -18,6 +18,7 @@ http://www.cisst.org/cisst/license.txt.
 #ifndef _mtsUniversalRobotScriptRT_h
 #define _mtsUniversalRobotScriptRT_h
 
+#include <cisstCommon/cmnPortability.h>
 #include <cisstVector/vctTypes.h>
 #include <cisstOSAbstraction/osaSocket.h>
 #include <cisstMultiTask/mtsTaskContinuous.h>
@@ -36,6 +37,11 @@ http://www.cisst.org/cisst/license.txt.
 // Always include last
 #include <sawUniversalRobot/sawUniversalRobotExport.h>
 
+#ifdef CISST_COMPILER_IS_MSVC
+// Disable warning about unsafe use of type 'bool' (in cisstVector)
+#pragma warning(disable: 4804)
+#endif
+
 class CISST_EXPORT mtsUniversalRobotScriptRT : public mtsTaskContinuous
 {
     CMN_DECLARE_SERVICES(CMN_DYNAMIC_CREATION_ONEARG, CMN_LOG_ALLOW_VERBOSE)
@@ -47,7 +53,7 @@ public:
     // whereas CB3 (and CB3.1) uses firmware starting with Version 3.0.
     // CB1: Not supported by this software (might be same as CB2)
     // CB2: Defined in Dashboard Server how-to; also in C API for Version 1.8, file robotinterface.h
-    // CB3: Defined in Client_Interface.xlsx.
+    // CB3 (and e-Series): Defined in Client_Interface.xlsx.
     // For all versions, ROBOT_MODE_NO_CONTROLLER = -1
     enum RobotModesCB2 { ROBOT_RUNNING_MODE, ROBOT_FREEDRIVE_MODE,
                          ROBOT_READY_MODE, ROBOT_INITIALIZING_MODE, ROBOT_SECURITY_STOPPED_MODE,
@@ -89,7 +95,6 @@ public:
                       JOINT_INITIALISATION_MODE = 254,           // C API
                       JOINT_MODE_IDLE = 255 };
 
-    static char *JointModeNames[21];
     static std::string JointModeName(int mode);
 
     // SafetyMode is available starting with firmware version 3.0. Since the value of 0 is not used by
@@ -174,6 +179,8 @@ protected:
     static char *VersionName[VER_MAX];
     static unsigned long PacketLength[VER_MAX];
     unsigned long PacketCount[VER_MAX];
+
+    static char *JointModeNames[JOINT_MODE_IDLE-JOINT_MODE_RESET+1];
 
     // Called by constructors
     void Init(void);

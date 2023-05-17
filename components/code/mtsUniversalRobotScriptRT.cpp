@@ -209,7 +209,7 @@ std::string mtsUniversalRobotScriptRT::RobotModeName(int mode, int version)
 // Note that "READY_FOR_POWER_OFF" is replaced by "EMERGENCY_STOPPED" for older versions
 // (see Startup method). Previously, "VIOLATION" was called "SECURITY_STOPPED", but this
 // seems to just be a terminology change.
-char *mtsUniversalRobotScriptRT::JointModeNames[21] =
+char *mtsUniversalRobotScriptRT::JointModeNames[JOINT_MODE_IDLE-JOINT_MODE_RESET+1] =
            { "RESET", "SHUTTING_DOWN", "PART_D_CALIBRATION", "BACKDRIVE", "POWER_OFF",
              "READY_FOR_POWER_OFF", "CALVAL_INITIALIZATION", "ERROR",
              "FREEDRIVE", "SIMULATED", "NOT_RESPONDING", "MOTOR_INITIALISATION",
