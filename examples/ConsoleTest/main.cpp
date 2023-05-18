@@ -422,11 +422,13 @@ void UniversalRobotClient::GetCartesianPose(prmPositionCartesianSet &cartposSet,
 {
     vct3 cartPos, cartVec;
     vctDoubleRot3 cartRot;
+    vctBool2 cartMask;
 
-    cartposSet.SetMask(vctBool2(false, false));
+    cartMask.SetAll(false);
     std::cout << std::endl << "Enter Cartesian XYZ positions, mm (invalid char to skip): ";
     std::cin >> cartPos[0] >> cartPos[1] >> cartPos[2];
     if (std::cin.good()) {
+        cartMask[0] = true;
         cartPos.Divide(1000.0);  // convert from mm to m
     }
     else {
@@ -438,6 +440,7 @@ void UniversalRobotClient::GetCartesianPose(prmPositionCartesianSet &cartposSet,
     std::cout << "Enter Cartesian Euler-ZYX orientation, deg (invalid char to skip): ";
     std::cin >> cartVec[0] >> cartVec[1] >> cartVec[2];
     if (std::cin.good()) {
+        cartMask[1] = true;
         cartVec.Multiply(cmnPI_180);
         if (isRelative) {
             // Compute relative orientation as a rotation matrix
@@ -464,6 +467,7 @@ void UniversalRobotClient::GetCartesianPose(prmPositionCartesianSet &cartposSet,
         std::cin.ignore(100, '\n');
     }
     cartposSet.SetGoal(vctFrm3(cartRot, cartPos));
+    cartposSet.SetMask(cartMask);
 }
 
 int main(int argc, char **argv)
