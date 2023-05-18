@@ -285,6 +285,7 @@ void mtsUniversalRobotScriptRT::Init(void)
     pversion.minor = 0;
     pversion.bugfix = 0;
 
+    ticksPerSec = 125;        // Default for CB2/CB3
     expectedPeriod = 0.008;   // Default for CB2/CB3
 
     // Joint Configuration
@@ -572,6 +573,7 @@ void mtsUniversalRobotScriptRT::Run(void)
                 }
                 // Expected period is 0.008 sec (125 Hz) for CB2/CB3 and
                 // 0.002 (500 Hz) for e-Series
+                ticksPerSec = (version < VER_50_53) ? 125 : 500;
                 expectedPeriod = (version < VER_50_53) ? 0.008 : 0.002;
                 break;
             }
@@ -773,7 +775,7 @@ void mtsUniversalRobotScriptRT::Run(void)
             // Also using VelCmdTimeout, VelCmdString for free drive mode
             VelCmdTimeout--;
             if (VelCmdTimeout <= 0) {
-                VelCmdTimeout = 125;   // 1 second
+                VelCmdTimeout = ticksPerSec;   // 1 second
                 socket.Send(VelCmdString);
             }
         }
@@ -868,8 +870,8 @@ void mtsUniversalRobotScriptRT::SetRobotFreeDriveMode(void)
         } else {
             VelCmdTimeout = 0;
             strcpy(VelCmdString, "def saw_ur_freedrive():\n\tfreedrive_mode()\n\tsleep(1.5)\nend\n");
-            // This string will be sent from the Run method, once every 125 loops (1 second).
-            // The programmed sleep is for 1.5 seconds, which should be long enough.
+            // This string will be sent from the Run method, once every 125 (CB2/CB3) or 500 (e-series)
+            // loops (1 second). The programmed sleep is for 1.5 seconds, which should be long enough.
         }
         UR_State = UR_FREE_DRIVE;
         mInterface->SendStatus(this->GetName() + ": set freedrive mode");
@@ -968,7 +970,8 @@ void mtsUniversalRobotScriptRT::servo_jv(const prmVelocityJointSet & jtvelSet)
                     jtvel[0], jtvel[1], jtvel[2], jtvel[3], jtvel[4], jtvel[5], 1.4);
             strcpy(VelCmdStop, "speedj([0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 1.4, 0.0)\n");
         }
-        VelCmdTimeout = 125;   // Number of cycles for command to remain valid (1 second)
+        // Number of cycles for command to remain valid (1 second)
+        VelCmdTimeout = ticksPerSec;
         UR_State = UR_VEL_MOVING;
     } else {
         RobotNotReady();
@@ -1010,7 +1013,8 @@ void mtsUniversalRobotScriptRT::servo_cv(const prmVelocityCartesianSet & cartVel
                 "speedl([%6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf], %6.4lf, 0.1)\n",
                 velxyz.X(), velxyz.Y(), velxyz.Z(), velrot.X(), velrot.Y(), velrot.Z(), accel);
         strcpy(VelCmdStop, "speedl([0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 1.4, 0.0)\n");
-        VelCmdTimeout = 125;   // Number of cycles for command to remain valid (1 second)
+        // Number of cycles for command to remain valid (1 second)
+        VelCmdTimeout = ticksPerSec;
         UR_State = UR_VEL_MOVING;
     } else {
         RobotNotReady();

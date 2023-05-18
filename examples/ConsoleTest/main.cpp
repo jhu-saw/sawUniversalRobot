@@ -147,9 +147,9 @@ public:
                                      this, "ReceiveTimeout");
             req->AddEventHandlerWrite(&UniversalRobotClient::OnPacketInvalid,
                                      this, "PacketInvalid");
-            req->AddEventHandlerWrite(&UniversalRobotClient::OnErrorEvent, this, "Error");
-            req->AddEventHandlerWrite(&UniversalRobotClient::OnWarningEvent,this, "Warning");
-            req->AddEventHandlerWrite(&UniversalRobotClient::OnStatusEvent, this, "Status");
+            req->AddEventHandlerWrite(&UniversalRobotClient::OnErrorEvent, this, "error");
+            req->AddEventHandlerWrite(&UniversalRobotClient::OnWarningEvent,this, "warning");
+            req->AddEventHandlerWrite(&UniversalRobotClient::OnStatusEvent, this, "status");
         }
     }
 

@@ -134,6 +134,8 @@ protected:
         int bugfix;
     } pversion;
 
+    // Ticks per second (frequency) as an integer
+    unsigned int ticksPerSec;
     // Expected period (0.008 for CB2/CB3, 0.002 for e-Series)
     double expectedPeriod;
 
