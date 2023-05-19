@@ -2,7 +2,7 @@
 /*ex: set filetype=cpp softtabstop=4 shiftwidth=4 tabstop=4 cindent expandtab:*/
 
 /*
-(C) Copyright 2016-2022 Johns Hopkins University (JHU), All Rights Reserved.
+(C) Copyright 2016-2023 Johns Hopkins University (JHU), All Rights Reserved.
 
 --- begin cisst license - do not edit ---
 
@@ -47,6 +47,7 @@ private:
     mtsFunctionRead setpoint_cp;
     mtsFunctionRead GetConnected;
     mtsFunctionRead GetVersion;
+    mtsFunctionRead GetVersionString;
     mtsFunctionRead GetAveragePeriod;
     mtsFunctionWrite move_jp;
     mtsFunctionWrite move_cp;
@@ -61,6 +62,7 @@ private:
     mtsFunctionRead GetRobotMode;
     mtsFunctionRead GetJointModes;
     mtsFunctionRead GetSafetyMode;
+    mtsFunctionRead GetPayload;
     mtsFunctionRead IsMotorPowerOn;
     mtsFunctionRead IsEStop;
     mtsFunctionVoid SetRobotFreeDriveMode;
@@ -125,9 +127,11 @@ public:
             req->AddFunction("ShowPopup", ShowPopup);
             req->AddFunction("SendToDashboardServer", SendToDashboardServer);
             req->AddFunction("GetVersion", GetVersion);
+            req->AddFunction("GetVersionString", GetVersionString);
             req->AddFunction("GetRobotMode", GetRobotMode, MTS_OPTIONAL);
             req->AddFunction("GetJointModes", GetJointModes, MTS_OPTIONAL);
             req->AddFunction("GetSafetyMode", GetSafetyMode, MTS_OPTIONAL);
+            req->AddFunction("GetPayload", GetPayload);
             req->AddFunction("IsMotorPowerOn", IsMotorPowerOn);
             req->AddFunction("IsEStop", IsEStop);
             req->AddFunction("SetRobotFreeDriveMode", SetRobotFreeDriveMode);
@@ -143,9 +147,9 @@ public:
                                      this, "ReceiveTimeout");
             req->AddEventHandlerWrite(&UniversalRobotClient::OnPacketInvalid,
                                      this, "PacketInvalid");
-            req->AddEventHandlerWrite(&UniversalRobotClient::OnErrorEvent, this, "Error");
-            req->AddEventHandlerWrite(&UniversalRobotClient::OnWarningEvent,this, "Warning");
-            req->AddEventHandlerWrite(&UniversalRobotClient::OnStatusEvent, this, "Status");
+            req->AddEventHandlerWrite(&UniversalRobotClient::OnErrorEvent, this, "error");
+            req->AddEventHandlerWrite(&UniversalRobotClient::OnWarningEvent,this, "warning");
+            req->AddEventHandlerWrite(&UniversalRobotClient::OnStatusEvent, this, "status");
         }
     }
 
@@ -190,11 +194,11 @@ public:
         double payload;
         int toolVoltage;
         int version;
+        std::string versionString;
         int robotMode;
         vctInt6 jointModes;
         int safetyMode;
         bool flag;
-        const char *versionString[] = { "Unknown", "Pre-1.8", "1.8", "3.0-3.1", "3.2-3.4", "3.5-3.9", "3.10-3.11" };
         size_t i;
         vct3 posGoal;
         vctDoubleRot3 rotGoal;
@@ -297,7 +301,9 @@ public:
                     break;
 
                 case 'p':
-                    std::cout << std::endl << "Enter payload (kg): ";
+                    GetPayload(payload);
+                    std::cout << std::endl << "Current payload (kg): " << payload << std::endl;
+                    std::cout << "Enter new payload (kg): ";
                     std::cin >> payload;
                     SetPayload(payload);
                     break;
@@ -313,11 +319,8 @@ public:
                     break;
 
                 case 'x':   // get version
-                    GetVersion(version);
-                    if ((version < 0) || (version >= sizeof(versionString)/sizeof(versionString[0])))
-                        std::cout << std::endl << "Firmware version, invalid response = " << version << std::endl;
-                    else
-                        std:: cout << std::endl << "Firmware version: " << versionString[version] << std::endl;
+                    GetVersionString(versionString);
+                    std:: cout << std::endl << "Firmware version: " << versionString << std::endl;
                     break;
 
                 case 'f':   // free drive mode
@@ -369,6 +372,8 @@ public:
                         std::cout << "Emergency stop is pressed" << std::endl;
                     else
                         std::cout << "Emergency stop is not pressed" << std::endl;
+                    GetPayload(payload);
+                    std::cout << "Payload (kg): " << payload << std::endl;
                     break;
 
                 case 'e':   // enable motor power
@@ -417,11 +422,13 @@ void UniversalRobotClient::GetCartesianPose(prmPositionCartesianSet &cartposSet,
 {
     vct3 cartPos, cartVec;
     vctDoubleRot3 cartRot;
+    vctBool2 cartMask;
 
-    cartposSet.SetMask(vctBool2(false, false));
+    cartMask.SetAll(false);
     std::cout << std::endl << "Enter Cartesian XYZ positions, mm (invalid char to skip): ";
     std::cin >> cartPos[0] >> cartPos[1] >> cartPos[2];
     if (std::cin.good()) {
+        cartMask[0] = true;
         cartPos.Divide(1000.0);  // convert from mm to m
     }
     else {
@@ -433,6 +440,7 @@ void UniversalRobotClient::GetCartesianPose(prmPositionCartesianSet &cartposSet,
     std::cout << "Enter Cartesian Euler-ZYX orientation, deg (invalid char to skip): ";
     std::cin >> cartVec[0] >> cartVec[1] >> cartVec[2];
     if (std::cin.good()) {
+        cartMask[1] = true;
         cartVec.Multiply(cmnPI_180);
         if (isRelative) {
             // Compute relative orientation as a rotation matrix
@@ -459,6 +467,7 @@ void UniversalRobotClient::GetCartesianPose(prmPositionCartesianSet &cartposSet,
         std::cin.ignore(100, '\n');
     }
     cartposSet.SetGoal(vctFrm3(cartRot, cartPos));
+    cartposSet.SetMask(cartMask);
 }
 
 int main(int argc, char **argv)

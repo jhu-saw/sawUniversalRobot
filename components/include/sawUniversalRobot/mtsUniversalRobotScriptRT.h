@@ -4,7 +4,7 @@
 /*
   Author(s): Peter Kazanzides, H. Tutkun Sen, Shuyang Chen
 
-  (C) Copyright 2016-2020 Johns Hopkins University (JHU), All Rights Reserved.
+  (C) Copyright 2016-2023 Johns Hopkins University (JHU), All Rights Reserved.
 
 --- begin cisst license - do not edit ---
 
@@ -18,6 +18,7 @@ http://www.cisst.org/cisst/license.txt.
 #ifndef _mtsUniversalRobotScriptRT_h
 #define _mtsUniversalRobotScriptRT_h
 
+#include <cisstCommon/cmnPortability.h>
 #include <cisstVector/vctTypes.h>
 #include <cisstOSAbstraction/osaSocket.h>
 #include <cisstMultiTask/mtsTaskContinuous.h>
@@ -36,6 +37,11 @@ http://www.cisst.org/cisst/license.txt.
 // Always include last
 #include <sawUniversalRobot/sawUniversalRobotExport.h>
 
+#ifdef CISST_COMPILER_IS_MSVC
+// Disable warning about unsafe use of type 'bool' (in cisstVector)
+#pragma warning(disable: 4804)
+#endif
+
 class CISST_EXPORT mtsUniversalRobotScriptRT : public mtsTaskContinuous
 {
     CMN_DECLARE_SERVICES(CMN_DYNAMIC_CREATION_ONEARG, CMN_LOG_ALLOW_VERBOSE)
@@ -47,7 +53,7 @@ public:
     // whereas CB3 (and CB3.1) uses firmware starting with Version 3.0.
     // CB1: Not supported by this software (might be same as CB2)
     // CB2: Defined in Dashboard Server how-to; also in C API for Version 1.8, file robotinterface.h
-    // CB3: Defined in Client_Interface.xlsx.
+    // CB3 (and e-Series): Defined in Client_Interface.xlsx.
     // For all versions, ROBOT_MODE_NO_CONTROLLER = -1
     enum RobotModesCB2 { ROBOT_RUNNING_MODE, ROBOT_FREEDRIVE_MODE,
                          ROBOT_READY_MODE, ROBOT_INITIALIZING_MODE, ROBOT_SECURITY_STOPPED_MODE,
@@ -63,37 +69,46 @@ public:
     // JointModes available starting with firmware version 1.8. Some of these definitions are not
     // documented in the script interface (Client_Interface.xlsx), but were instead obtained from
     // the C API (microprocessor_commands.h) for Version 1.8.
-    enum JointModes { JOINT_SHUTTING_DOWN_MODE = 236,          // Not in C API
-                      JOINT_PART_D_CALIBRATION_MODE = 237,
-                      JOINT_BACKDRIVE_MODE = 238,
-                      JOINT_POWER_OFF_MODE = 239,
-                      JOINT_EMERGENCY_STOPPED_MODE = 240,      // C API
-                      JOINT_CALVAL_INITIALIZATION_MODE = 241,  // C API
-                      JOINT_ERROR_MODE = 242,                  // C API
-                      JOINT_FREEDRIVE_MODE = 243,              // C API
-                      JOINT_SIMULATED_MODE = 244,              // C API
-                      JOINT_NOT_RESPONDING_MODE = 245,
-                      JOINT_MOTOR_INITIALISATION_MODE = 246,
-                      JOINT_BOOTING_MODE = 247,
-                      JOINT_PART_D_CALIBRATION_ERROR_MODE = 248,
-                      JOINT_BOOTLOADER_MODE = 249,
-                      JOINT_CALIBRATION_MODE = 250,
-                      JOINT_SECURITY_STOPPED_MODE = 251,
-                      JOINT_FAULT_MODE = 252,
-                      JOINT_RUNNING_MODE = 253,
-                      JOINT_INITIALISATION_MODE = 254,         // C API
-                      JOINT_IDLE_MODE = 255 };
+    // Note that this enum intentionally contains some duplicate values, since there is a single
+    // enum for all versions.
+    enum JointModes { JOINT_MODE_RESET = 235,
+                      JOINT_MODE_SHUTTING_DOWN = 236,
+                      JOINT_PART_D_CALIBRATION_MODE = 237,       // Internal use only
+                      JOINT_MODE_BACKDRIVE = 238,
+                      JOINT_MODE_POWER_OFF = 239,
+                      JOINT_MODE_READY_FOR_POWER_OFF = 240,      // Version 5.1+
+                      JOINT_EMERGENCY_STOPPED_MODE = 240,        // C API
+                      JOINT_CALVAL_INITIALIZATION_MODE = 241,    // C API
+                      JOINT_ERROR_MODE = 242,                    // C API
+                      JOINT_FREEDRIVE_MODE = 243,                // C API
+                      JOINT_SIMULATED_MODE = 244,                // C API
+                      JOINT_MODE_NOT_RESPONDING = 245,
+                      JOINT_MODE_MOTOR_INITIALISATION = 246,
+                      JOINT_MODE_BOOTING = 247,
+                      JOINT_PART_D_CALIBRATION_ERROR_MODE = 248, // Internal use only
+                      JOINT_MODE_BOOTLOADER = 249,
+                      JOINT_CALIBRATION_MODE = 250,              // Internal use only
+                      JOINT_MODE_VIOLATION = 251,
+                      JOINT_SECURITY_STOPPED_MODE = 251,         // Seems to now be called VIOLATION
+                      JOINT_MODE_FAULT = 252,
+                      JOINT_MODE_RUNNING = 253,
+                      JOINT_INITIALISATION_MODE = 254,           // C API
+                      JOINT_MODE_IDLE = 255 };
 
     static std::string JointModeName(int mode);
 
     // SafetyMode is available starting with firmware version 3.0. Since the value of 0 is not used by
     // Universal Robots, we define it to be SAFETY_MODE_UNKNOWN.
+    // e-Series added SAFETY_MODE_VALIDATE_JOINT_ID (10)
+    // Recent documentation added SAFETY_MODE_UNDEFINED_SAFETY_MODE (11)
     enum SafetyModes { SAFETY_MODE_UNKNOWN, SAFETY_MODE_NORMAL, SAFETY_MODE_REDUCED,
                        SAFETY_MODE_PROTECTIVE_STOP, SAFETY_MODE_RECOVERY,
                        SAFETY_MODE_SAFEGUARD_STOP,          // Physical s-stop interface input
                        SAFETY_MODE_SYSTEM_EMERGENCY_STOP,   // Physical e-stop interface input
                        SAFETY_MODE_ROBOT_EMERGENCY_STOP,    // Physical e-stop interface input
-                       SAFETY_MODE_VIOLATION, SAFETY_MODE_FAULT };
+                       SAFETY_MODE_VIOLATION, SAFETY_MODE_FAULT,
+                       SAFETY_MODE_VALIDATE_JOINT_ID,
+                       SAFETY_MODE_UNDEFINED_SAFETY_MODE};
 
     static std::string SafetyModeName(int mode);
 
@@ -106,7 +121,7 @@ protected:
     mtsStateTable ConfigurationStateTable;
 
     // This buffer must be large enough for largest packet size.
-    // According to documentation, port 30003 packets are up to 1060 bytes (Version 3.2)
+    // According to documentation, port 30003 packets are up to 1140 bytes (Version 3.15)
     // (On port 30001, have seen packets as large as 1295 bytes).
     // We keep it less than twice the minimum packet length (764 bytes) so that we cannot
     // accumulate more than one complete packet in the buffer.
@@ -119,12 +134,18 @@ protected:
         int bugfix;
     } pversion;
 
+    // Ticks per second (frequency) as an integer
+    unsigned int ticksPerSec;
+    // Expected period (0.008 for CB2/CB3, 0.002 for e-Series)
+    double expectedPeriod;
+
     // State table entries
     double ControllerTime;
     double ControllerExecTime;
     int robotMode;
     vctInt6 jointModes;
     int safetyMode;
+    double payload;    // payload mass in kg
     bool isPowerOn;
     bool isEStop;
     bool isSecurityStop;
@@ -155,10 +176,13 @@ protected:
 
     // For UR version determination
     enum FirmwareVersion {VER_UNKNOWN, VER_PRE_18, VER_18, VER_30_31, VER_32_34, VER_35_39, VER_310_313,
-                          VER_314_315, VER_MAX};
+                          VER_314_315, VER_3_NEW, VER_50_53, VER_54_58, VER_59, VER_510, VER_5_NEW, VER_MAX};
     FirmwareVersion version;
+    static char *VersionName[VER_MAX];
     static unsigned long PacketLength[VER_MAX];
     unsigned long PacketCount[VER_MAX];
+
+    static char *JointModeNames[JOINT_MODE_IDLE-JOINT_MODE_RESET+1];
 
     // Called by constructors
     void Init(void);
@@ -207,11 +231,17 @@ protected:
         ver = static_cast<int>(version);
     }
 
+    void GetVersionString(std::string &str) const;
+
     // Set the gravity vector
     void SetGravity(const vct3 &gravity);
 
     // Set payload mass (kg). Robot can also accept a 3-vector
     // for the center of mass.
+    // The payload can be read by GetPayload, but note that for
+    // Versions prior to 5.10, this just returns the last value
+    // written by SetPayload (i.e., it is not aware of any payload
+    // changes made outside this interface).
     void SetPayload(const double &mass_kg);
 
     // Set transformation from output flange to TCP
@@ -226,7 +256,16 @@ protected:
     // Send command to Dashboard Server
     void SendToDashboardServer(const std::string &msg);
 
-    void GetPolyscopeVersion(std::string &pver);
+    // Receive response from Dashboard Server
+    bool RecvFromDashboardServer(std::string &resp);
+
+    // Reads Polyscope version from Dashboard Server and stores
+    // result in class
+    bool ReadPolyscopeVersion(void);
+
+    // Returns formatted string based on Polyscope version previously
+    // obtained from Dashboard Server.
+    std::string GetPolyscopeVersionString(void) const;
 
     // Connection Parameters
     // IP address (TCP/IP)
