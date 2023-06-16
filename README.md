@@ -10,11 +10,15 @@ respond to any motion commands (or any other commands that change the state of t
 This component runs on an external PC and communicates with the UR controller via a TCP/IP socket
 to port 30003. It also connects to the Dashboard Server via port 29999.
 
-The `ros` folder contains code for a ROS node that interfaces with the
+Since the main component doesn't depend on ROS, it can be used on Windows or Linux.  It can be integrated as a C++ component or with any cisst/SAW bridge component (using the `-m` command line option):
+  * UDP sockets with JSON: https://github.com/jhu-saw/sawSocketStreamer (any OS)
+  * OpenIGTLink: https://github.com/jhu-saw/sawOpenIGTLink (any OS)
+  * ROS 1 or 2 (Linux)
+
+The `ros` folder contains code for a ROS 1 node that interfaces with the
 sawUniversalRobot component and publishes the 3D transformations as
 well as the joint state (position, velocity and effort).  To build
-the ROS node, make sure you use `catkin build`.
-
+the ROS node, make sure you use `catkin build`.  For ROS 2, see https://github.com/jhu-saw/sawUniversalRobotROS2.
 
 # Links
  * License: http://github.com/jhu-cisst/cisst/blob/master/license.txt
@@ -23,7 +27,7 @@ the ROS node, make sure you use `catkin build`.
 # Dependencies
  * cisst libraries: https://github.com/jhu-cisst/cisst
  * Qt for user interface
- * ROS (optional)
+ * ROS 1 or 2 (optional)
 
 # Running the examples
 
