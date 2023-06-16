@@ -1,5 +1,5 @@
 #
-# (C) Copyright 2016-2021 Johns Hopkins University (JHU), All Rights Reserved.
+# (C) Copyright 2016-2023 Johns Hopkins University (JHU), All Rights Reserved.
 #
 # --- begin cisst license - do not edit ---
 #
@@ -9,7 +9,8 @@
 #
 # --- end cisst license ---
 
-cmake_minimum_required (VERSION 3.0)
+cmake_minimum_required (VERSION 3.10)
+project (sawUniversalRobotConsoleTest VERSION 1.1.0)
 
 # List cisst libraries needed
 set (REQUIRED_CISST_LIBRARIES cisstCommon
@@ -38,6 +39,15 @@ if (cisst_FOUND_AS_REQUIRED)
 
   # link with sawUniversalRobot library
   target_link_libraries (sawUniversalRobotConsole ${sawUniversalRobot_LIBRARIES})
+
+  set_target_properties (sawUniversalRobotConsole PROPERTIES
+    COMPONENT sawUniversalRobot-Examples
+    FOLDER "sawUniversalRobot")
+
+  install (TARGETS sawUniversalRobotConsole COMPONENT sawUniversalRobot-Examples
+    RUNTIME DESTINATION bin
+    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib)
 
 else (cisst_FOUND_AS_REQUIRED)
   message ("Information: sawUniversalRobotConsole will not be compiled, it requires ${REQUIRED_CISST_LIBRARIES}")

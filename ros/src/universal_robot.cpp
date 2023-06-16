@@ -2,10 +2,10 @@
 /* ex: set filetype=cpp softtabstop=4 shiftwidth=4 tabstop=4 cindent expandtab: */
 
 /*
-  Author(s):  Anton Deguet
+  Author(s):  Anton Deguet, Peter Kazanzides
   Created on: 2017-02-22
 
-  (C) Copyright 2017-2019 Johns Hopkins University (JHU), All Rights Reserved.
+  (C) Copyright 2017-2023 Johns Hopkins University (JHU), All Rights Reserved.
 
 --- begin cisst license - do not edit ---
 
@@ -27,6 +27,7 @@ http://www.cisst.org/cisst/license.txt.
 
 #include <ros/ros.h>
 #include <cisst_ros_bridge/mtsROSBridge.h>
+#include <cisst_ros_crtk/mts_ros_crtk_bridge_provided.h>
 
 #include <QApplication>
 #include <QMainWindow>
@@ -41,34 +42,35 @@ int main(int argc, char * argv[])
     cmnLogger::SetMaskClassMatching("mtsUniversalRobot", CMN_LOG_ALLOW_ALL);
     cmnLogger::AddChannel(std::cerr, CMN_LOG_ALLOW_ERRORS_AND_WARNINGS);
 
-    // remove ROS args
-    ros::V_string argout;
-    ros::removeROSArgs(argc, argv, argout);
-    argc = argout.size();
+    // create ROS node handle
+    ros::init(argc, argv, "universal_robot", ros::init_options::AnonymousName);
+    ros::NodeHandle rosNodeHandle;
 
     // parse options
     cmnCommandLineOptions options;
     std::string ipAddress;
     double rosPeriod = 10.0 * cmn_ms;
+    double tfPeriod = 20.0 * cmn_ms;
 
     options.AddOptionOneValue("i", "ip-address",
                               "IP address for the UR controller",
                               cmnCommandLineOptions::REQUIRED_OPTION, &ipAddress);
+    options.AddOptionNoValue("D", "dark-mode",
+                             "replaces the default Qt palette with darker colors");
     options.AddOptionOneValue("p", "ros-period",
-                              "period in seconds to read all tool positions (default 0.01, 10 ms, 100Hz).  There is no point to have a period higher than the tracker component",
+                              "period in seconds to read all tool positions (default 0.01, 10 ms, 100Hz).  There is no point to have a period higher than the UR component",
                               cmnCommandLineOptions::OPTIONAL_OPTION, &rosPeriod);
+    options.AddOptionOneValue("P", "tf-ros-period",
+                              "period in seconds to read all components and broadcast tf2 (default 0.02, 20 ms, 50Hz).  There is no point to have a period higher than the UR's period",
+                              cmnCommandLineOptions::OPTIONAL_OPTION, &tfPeriod);
 
-    typedef std::list<std::string> managerConfigType;
-    managerConfigType managerConfig;
+    std::list<std::string> managerConfig;
     options.AddOptionMultipleValues("m", "component-manager",
                                     "JSON file to configure component manager",
                                     cmnCommandLineOptions::OPTIONAL_OPTION, &managerConfig);
 
     // check that all required options have been provided
-    std::string errorMessage;
-    if (!options.Parse(argc, argv, errorMessage)) {
-        std::cerr << "Error: " << errorMessage << std::endl;
-        options.PrintUsage(std::cerr);
+    if (!options.Parse(argc, argv, std::cerr)) {
         return -1;
     }
     std::string arguments;
@@ -76,71 +78,22 @@ int main(int argc, char * argv[])
     std::cout << "Options provided:" << std::endl << arguments << std::endl;
 
     // create the components
-    mtsUniversalRobotScriptRT * device = new mtsUniversalRobotScriptRT("UR");
-    device->Configure(ipAddress);
+    mtsUniversalRobotScriptRT * ur = new mtsUniversalRobotScriptRT("UR");
+    ur->Configure(ipAddress);
 
     // add the components to the component manager
     mtsManagerLocal * componentManager = mtsComponentManager::GetInstance();
-    componentManager->AddComponent(device);
-
-    // ROS bridge
-    // don't spin, don't catch sigint
-    mtsROSBridge * rosPeriodic = new mtsROSBridge("URPub", rosPeriod, false, false);
-    // spin at very high rate
-    mtsROSBridge * rosSpin = new mtsROSBridge("URSpin", 0.1 * cmn_ms, true, false);
+    componentManager->AddComponent(ur);
 
     // create a Qt user interface
     QApplication application(argc, argv);
     cmnQt::QApplicationExitsOnCtrlC();
+    if (options.IsSet("dark-mode")) {
+        cmnQt::SetDarkMode();
+    }
 
     // organize all widgets in a tab widget
     QTabWidget * tabWidget = new QTabWidget;
-
-    // configure all components
-
-    // ROS publisher
-    rosPeriodic->AddPublisherFromCommandRead<prmPositionCartesianGet, geometry_msgs::PoseStamped>
-        ("ur", "measured_cp", "measured_cp");
-    rosPeriodic->AddPublisherFromCommandRead<prmVelocityCartesianGet, geometry_msgs::TwistStamped>
-        ("ur", "measured_cv", "measured_cv");
-    rosPeriodic->AddPublisherFromCommandRead<prmForceCartesianGet, geometry_msgs::WrenchStamped>
-        ("ur", "measured_cf", "measured_cf");
-
-    rosPeriodic->AddPublisherFromCommandRead<prmStateJoint, sensor_msgs::JointState>
-        ("ur", "measured_js", "measured_js");
-    rosPeriodic->AddPublisherFromCommandRead<prmStateJoint, sensor_msgs::JointState>
-        ("ur", "setpoint_js", "setpoint_js");
-
-    // ROS subscribers
-    rosSpin->AddSubscriberToCommandVoid("ur", "SetRobotFreeDriveMode", "SetRobotFreeDriveMode");
-    rosSpin->AddSubscriberToCommandVoid("ur", "SetRobotRunningMode", "SetRobotRunningMode");
-    rosSpin->AddSubscriberToCommandWrite<vctFrm3, geometry_msgs::PoseStamped>
-        ("ur", "SetToolFrame", "SetToolFrame");
-
-    rosSpin->AddSubscriberToCommandWrite<prmVelocityJointSet, sensor_msgs::JointState>
-        ("ur", "servo_jv", "servo_jv");
-    rosSpin->AddSubscriberToCommandWrite<prmPositionJointSet, sensor_msgs::JointState>
-        ("ur", "move_jp", "move_jp");
-    rosSpin->AddSubscriberToCommandWrite<prmVelocityCartesianSet, geometry_msgs::TwistStamped>
-        ("ur", "servo_cv", "servo_cv");
-    rosSpin->AddSubscriberToCommandWrite<prmPositionCartesianSet, geometry_msgs::PoseStamped>
-        ("ur", "move_cp", "move_cp");
-
-    // events can be published by spin bridge/thread
-    rosSpin->AddLogFromEventWrite("ur", "Error",
-                                  mtsROSEventWriteLog::ROS_LOG_ERROR);
-    rosSpin->AddLogFromEventWrite("ur", "Warning",
-                                    mtsROSEventWriteLog::ROS_LOG_WARN);
-    rosSpin->AddLogFromEventWrite("ur", "Status",
-                                  mtsROSEventWriteLog::ROS_LOG_INFO);
-
-    // add the bridge after all interfaces have been created
-    componentManager->AddComponent(rosPeriodic);
-    componentManager->Connect(rosPeriodic->GetName(), "ur",
-                              device->GetName(), "control");
-    componentManager->AddComponent(rosSpin);
-    componentManager->Connect(rosSpin->GetName(), "ur",
-                              device->GetName(), "control");
 
     // Qt Widgets
     prmStateRobotQtWidgetComponent * stateWidget
@@ -149,7 +102,7 @@ int main(int argc, char * argv[])
     stateWidget->Configure();
     componentManager->AddComponent(stateWidget);
     componentManager->Connect(stateWidget->GetName(), "Component",
-                              device->GetName(), "control");
+                              ur->GetName(), "control");
     tabWidget->addTab(stateWidget, "State");
 
     mtsSystemQtWidgetComponent * systemWidget
@@ -157,25 +110,39 @@ int main(int argc, char * argv[])
     systemWidget->Configure();
     componentManager->AddComponent(systemWidget);
     componentManager->Connect(systemWidget->GetName(), "Component",
-                              device->GetName(), "control");
+                              ur->GetName(), "control");
     tabWidget->addTab(systemWidget, "System");
 
+    // ROS CRTK bridge
+    mts_ros_crtk_bridge_provided * crtk_bridge
+        = new mts_ros_crtk_bridge_provided("ur_crtk_bridge", &rosNodeHandle);
+    crtk_bridge->bridge_interface_provided(ur->GetName(),
+                                           "control",
+                                           "", // ros sub namespace
+                                           rosPeriod, tfPeriod);
+
+    // extra subscribers
+    crtk_bridge->subscribers_bridge()
+        .AddSubscriberToCommandVoid
+        ("control", "SetRobotFreeDriveMode", "SetRobotFreeDriveMode");
+    crtk_bridge->subscribers_bridge()
+        .AddSubscriberToCommandVoid
+        ("control", "SetRobotRunningMode", "SetRobotRunningMode");
+    crtk_bridge->subscribers_bridge()
+        .AddSubscriberToCommandWrite<vctFrm3, geometry_msgs::PoseStamped>
+        ("control", "SetToolFrame", "SetToolFrame");
+
+    componentManager->AddComponent(crtk_bridge);
+    crtk_bridge->Connect();
+    componentManager->Connect(crtk_bridge->subscribers_bridge().GetName(),
+                              "control",
+                              ur->GetName(),
+                              "control");
+
     // custom user component
-    const managerConfigType::iterator end = managerConfig.end();
-    for (managerConfigType::iterator iter = managerConfig.begin();
-         iter != end;
-         ++iter) {
-        if (!iter->empty()) {
-            if (!cmnPath::Exists(*iter)) {
-                CMN_LOG_INIT_ERROR << "File " << *iter
-                                   << " not found!" << std::endl;
-            } else {
-                if (!componentManager->ConfigureJSON(*iter)) {
-                    CMN_LOG_INIT_ERROR << "Configure: failed to configure component-manager" << std::endl;
-                    return -1;
-                }
-            }
-        }
+    if (!componentManager->ConfigureJSON(managerConfig)) {
+        CMN_LOG_INIT_ERROR << "Configure: failed to configure component-manager, check cisstLog for error messages" << std::endl;
+        return -1;
     }
 
     // create and start all components

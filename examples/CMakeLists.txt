@@ -1,5 +1,5 @@
 #
-# (C) Copyright 2014-2021 Johns Hopkins University (JHU), All Rights Reserved.
+# (C) Copyright 2014-2023 Johns Hopkins University (JHU), All Rights Reserved.
 #
 # --- begin cisst license - do not edit ---
 #
@@ -9,8 +9,8 @@
 #
 # --- end cisst license ---
 
-cmake_minimum_required (VERSION 3.0)
-project (sawUniversalRobotExamples)
+cmake_minimum_required (VERSION 3.10)
+project (sawUniversalRobotExamples VERSION 1.1.0)
 
 # Find cisst to define catkin macros so we can define the executable
 # output path (it is enough to find cisstCommon)
@@ -22,18 +22,7 @@ if (cisst_FOUND)
   include (${CISST_USE_FILE})
 
   # catkin/ROS paths
-  cisst_is_catkin_build (sawUniversalRobot_IS_CATKIN_BUILT)
-  if (sawUniversalRobot_IS_CATKIN_BUILT)
-    set (EXECUTABLE_OUTPUT_PATH "${CATKIN_DEVEL_PREFIX}/bin")
-    set (LIBRARY_OUTPUT_PATH    "${CATKIN_DEVEL_PREFIX}/lib")
-  else ()
-    if (NOT LIBRARY_OUTPUT_PATH)
-       set (LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_BINARY_DIR}/lib")
-    endif (NOT LIBRARY_OUTPUT_PATH)
-    if (NOT EXECUTABLE_OUTPUT_PATH)
-       set (EXECUTABLE_OUTPUT_PATH "${CMAKE_CURRENT_BINARY_DIR}/bin")
-    endif (NOT EXECUTABLE_OUTPUT_PATH)
-  endif ()
+  cisst_set_output_path ()
 
   add_subdirectory (ConsoleTest)
 

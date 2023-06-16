@@ -1,5 +1,5 @@
 #
-# (C) Copyright 2014-2021 Johns Hopkins University (JHU), All Rights Reserved.
+# (C) Copyright 2014-2023 Johns Hopkins University (JHU), All Rights Reserved.
 #
 # --- begin cisst license - do not edit ---
 #
@@ -9,16 +9,15 @@
 #
 # --- end cisst license ---
 
-cmake_minimum_required (VERSION 3.0)
-
-project (sawUniversalRobot)
+cmake_minimum_required (VERSION 3.10)
+project (sawUniversalRobot VERSION 1.1.0)
 
 set (REQUIRED_CISST_LIBRARIES
-     cisstCommon
-     cisstVector
-     cisstOSAbstraction
-     cisstMultiTask
-     cisstParameterTypes)
+  cisstCommon
+  cisstVector
+  cisstOSAbstraction
+  cisstMultiTask
+  cisstParameterTypes)
 
 find_package (cisst 1.1 REQUIRED ${REQUIRED_CISST_LIBRARIES})
 
@@ -28,74 +27,46 @@ if (cisst_FOUND_AS_REQUIRED)
   include (${CISST_USE_FILE})
 
   # catkin/ROS paths
-  cisst_is_catkin_build (sawUniversalRobot_IS_CATKIN_BUILT)
-  if (sawUniversalRobot_IS_CATKIN_BUILT)
-    set (sawUniversalRobot_CONFIG_FILE_DIR
-         "${CATKIN_DEVEL_PREFIX}/share/sawUniversalRobot/cmake")
-    set (EXECUTABLE_OUTPUT_PATH "${CATKIN_DEVEL_PREFIX}/bin")
-    set (LIBRARY_OUTPUT_PATH    "${CATKIN_DEVEL_PREFIX}/lib")
-  else ()
-    if (NOT LIBRARY_OUTPUT_PATH)
-       set (LIBRARY_OUTPUT_PATH "${CMAKE_CURRENT_BINARY_DIR}/lib")
-    endif (NOT LIBRARY_OUTPUT_PATH)
-    set (sawUniversalRobot_CONFIG_FILE_DIR "${sawUniversalRobot_BINARY_DIR}")
-  endif ()
-
-  set (CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
+  cisst_set_output_path ()
 
   # create/configure file for find_package (sawUniversalRobot)
-  set (sawUniversalRobot_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include"
-                                     "${CMAKE_CURRENT_BINARY_DIR}/include")
+  set (sawUniversalRobot_INCLUDE_DIR
+    "${CMAKE_CURRENT_SOURCE_DIR}/include"
+    "${CMAKE_CURRENT_BINARY_DIR}/include")
+  set (sawUniversalRobot_HEADER_DIR "${sawUniversalRobot_SOURCE_DIR}/include/sawUniversalRobot")
   set (sawUniversalRobot_LIBRARY_DIR "${LIBRARY_OUTPUT_PATH}")
   set (sawUniversalRobot_LIBRARIES sawUniversalRobot)
 
-  # Set the version number
-  set (sawUniversalRobot_VERSION_MAJOR "1")
-  set (sawUniversalRobot_VERSION_MINOR "1")
-  set (sawUniversalRobot_VERSION_PATCH "0")
-  set (sawUniversalRobot_VERSION "${sawUniversalRobot_VERSION_MAJOR}.${sawUniversalRobot_VERSION_MINOR}.${sawUniversalRobot_VERSION_PATCH}")
+  # Allow c++ code to find local header files
+  include_directories (${sawUniversalRobot_INCLUDE_DIR} ${sawUniversalRobot_BINARY_DIR})
 
-  # Generate sawUniversalRobotRevision.h
-  configure_file ("${CMAKE_CURRENT_SOURCE_DIR}/code/sawUniversalRobotRevision.h.in"
-                  "${CMAKE_CURRENT_BINARY_DIR}/include/sawUniversalRobot/sawUniversalRobotRevision.h")
-
-  include_directories (${sawUniversalRobot_INCLUDE_DIR})
+  # add all config files for this component
+  cisst_add_config_files (sawUniversalRobot)
 
   add_library (sawUniversalRobot ${IS_SHARED}
-               include/sawUniversalRobot/sawUniversalRobotExport.h
-               include/sawUniversalRobot/mtsUniversalRobotScriptRT.h
-               code/mtsUniversalRobotScriptRT.cpp)
-  set_property (TARGET sawUniversalRobot PROPERTY FOLDER "sawUniversalRobot")
+    ${sawUniversalRobot_HEADER_DIR}/sawUniversalRobotExport.h
+    ${sawUniversalRobot_HEADER_DIR}/mtsUniversalRobotScriptRT.h
+    code/mtsUniversalRobotScriptRT.cpp)
 
-  # Link with cisst libraries
+  set_target_properties (sawUniversalRobot PROPERTIES
+    VERSION ${sawUniversalRobot_VERSION}
+    FOLDER "sawUniversalRobot")
+
   cisst_target_link_libraries (sawUniversalRobot
-                               ${REQUIRED_CISST_LIBRARIES})
-
-  set (sawUniversalRobot_CMAKE_CONFIG_FILE
-       "${sawUniversalRobot_CONFIG_FILE_DIR}/sawUniversalRobotConfig.cmake")
-
-  configure_file ("${CMAKE_CURRENT_SOURCE_DIR}/cmake/sawUniversalRobotConfig.cmake.in"
-                  "${sawUniversalRobot_CMAKE_CONFIG_FILE}"
-                  @ONLY)
-
-  cisst_add_config_version ("${sawUniversalRobot_CONFIG_FILE_DIR}/sawUniversalRobotConfigVersion.cmake"
-                            VERSION ${sawUniversalRobot_VERSION}
-                            DESTINATION ${CISST_CMAKE_INSTALL_SUFFIX}/saw
-                            COMPONENT sawUniversalRobot)
+    ${REQUIRED_CISST_LIBRARIES})
 
   # Install target for headers and library
   install (DIRECTORY
-           "${sawUniversalRobot_SOURCE_DIR}/include/sawUniversalRobot"
-           DESTINATION include
-           PATTERN .svn EXCLUDE)
+    "${sawUniversalRobot_SOURCE_DIR}/include/sawUniversalRobot"
+    "${sawUniversalRobot_BINARY_DIR}/include/sawUniversalRobot"
+    DESTINATION include
+    COMPONENT sawUniversalRobot-dev
+    PATTERN .svn EXCLUDE)
 
-  install (TARGETS sawUniversalRobot
+  install (TARGETS sawUniversalRobot COMPONENT sawUniversalRobot
            RUNTIME DESTINATION bin
            LIBRARY DESTINATION lib
            ARCHIVE DESTINATION lib)
-
-  install (FILES "${sawUniversalRobot_BINARY_DIR}/sawUniversalRobotConfig.cmake"
-           DESTINATION "${CISST_CMAKE_INSTALL_SUFFIX}/saw")
 
 else (cisst_FOUND_AS_REQUIRED)
 

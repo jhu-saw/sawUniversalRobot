@@ -5,7 +5,7 @@
   Author(s):  Anton Deguet, Peter Kazanzides
   Created on: 2017-02-22
 
-  (C) Copyright 2017-2021 Johns Hopkins University (JHU), All Rights Reserved.
+  (C) Copyright 2017-2023 Johns Hopkins University (JHU), All Rights Reserved.
 
 --- begin cisst license - do not edit ---
 
@@ -52,12 +52,16 @@ int main(int argc, char * argv[])
     options.AddOptionOneValue("i", "ip-address",
                               "IP address for the UR controller",
                               cmnCommandLineOptions::REQUIRED_OPTION, &ipAddress);
+    options.AddOptionNoValue("D", "dark-mode",
+                             "replaces the default Qt palette with darker colors");
+
+    std::list<std::string> managerConfig;
+    options.AddOptionMultipleValues("m", "component-manager",
+                                    "JSON file to configure component manager",
+                                    cmnCommandLineOptions::OPTIONAL_OPTION, &managerConfig);
 
     // check that all required options have been provided
-    std::string errorMessage;
-    if (!options.Parse(argc, argv, errorMessage)) {
-        std::cerr << "Error: " << errorMessage << std::endl;
-        options.PrintUsage(std::cerr);
+    if (!options.Parse(argc, argv, std::cerr)) {
         return -1;
     }
     std::string arguments;
@@ -65,21 +69,23 @@ int main(int argc, char * argv[])
     std::cout << "Options provided:" << std::endl << arguments << std::endl;
 
     // create the components
-    mtsUniversalRobotScriptRT * device = new mtsUniversalRobotScriptRT("UR");
-    device->Configure(ipAddress);
+    mtsUniversalRobotScriptRT * ur = new mtsUniversalRobotScriptRT("UR");
+    ur->Configure(ipAddress);
 
     // add the components to the component manager
     mtsManagerLocal * componentManager = mtsComponentManager::GetInstance();
-    componentManager->AddComponent(device);
+    componentManager->AddComponent(ur);
 
     // create a Qt user interface
     QApplication application(argc, argv);
     cmnQt::QApplicationExitsOnCtrlC();
+    if (options.IsSet("dark-mode")) {
+        cmnQt::SetDarkMode();
+    }
 
     // organize all widgets in a tab widget
     QTabWidget * tabWidget = new QTabWidget;
 
-    // configure all components
     // Qt Widgets
     prmStateRobotQtWidgetComponent * stateWidget
         = new prmStateRobotQtWidgetComponent("UR-State");
@@ -87,7 +93,7 @@ int main(int argc, char * argv[])
     stateWidget->Configure();
     componentManager->AddComponent(stateWidget);
     componentManager->Connect(stateWidget->GetName(), "Component",
-                              device->GetName(), "control");
+                              ur->GetName(), "control");
     tabWidget->addTab(stateWidget, "State");
 
     mtsSystemQtWidgetComponent * systemWidget
@@ -95,8 +101,14 @@ int main(int argc, char * argv[])
     systemWidget->Configure();
     componentManager->AddComponent(systemWidget);
     componentManager->Connect(systemWidget->GetName(), "Component",
-                              device->GetName(), "control");
+                              ur->GetName(), "control");
     tabWidget->addTab(systemWidget, "System");
+
+    // custom user component
+    if (!componentManager->ConfigureJSON(managerConfig)) {
+        CMN_LOG_INIT_ERROR << "Configure: failed to configure component-manager, check cisstLog for error messages" << std::endl;
+        return -1;
+    }
 
     // create and start all components
     componentManager->CreateAllAndWait(5.0 * cmn_s);
