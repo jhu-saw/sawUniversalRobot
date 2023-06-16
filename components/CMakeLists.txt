@@ -38,7 +38,7 @@ if (cisst_FOUND_AS_REQUIRED)
   set (sawUniversalRobot_LIBRARIES sawUniversalRobot)
 
   # Allow c++ code to find local header files
-  include_directories (${sawUniversalRobot_INCLUDE_DIR} ${sawUniversalRobot_BINARY_DIR})
+  include_directories (${sawUniversalRobot_INCLUDE_DIR})
 
   # add all config files for this component
   cisst_add_config_files (sawUniversalRobot)
