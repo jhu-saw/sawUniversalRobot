@@ -14,7 +14,7 @@ project (sawUniversalRobotExamples VERSION 1.1.0)
 
 # Find cisst to define catkin macros so we can define the executable
 # output path (it is enough to find cisstCommon)
-find_package (cisst 1.1 COMPONENTS cisstCommon)
+find_package (cisst 1.2 COMPONENTS cisstCommon)
 
 if (cisst_FOUND)
 
