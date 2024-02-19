@@ -5,7 +5,7 @@
   Author(s):  Anton Deguet, Peter Kazanzides
   Created on: 2017-02-22
 
-  (C) Copyright 2017-2023 Johns Hopkins University (JHU), All Rights Reserved.
+  (C) Copyright 2017-2024 Johns Hopkins University (JHU), All Rights Reserved.
 
 --- begin cisst license - do not edit ---
 
@@ -25,7 +25,6 @@ http://www.cisst.org/cisst/license.txt.
 #include <cisstParameterTypes/prmStateRobotQtWidget.h>
 #include <sawUniversalRobot/mtsUniversalRobotScriptRT.h>
 
-#include <ros/ros.h>
 #include <cisst_ros_bridge/mtsROSBridge.h>
 #include <cisst_ros_crtk/mts_ros_crtk_bridge_provided.h>
 
@@ -43,8 +42,8 @@ int main(int argc, char * argv[])
     cmnLogger::AddChannel(std::cerr, CMN_LOG_ALLOW_ERRORS_AND_WARNINGS);
 
     // create ROS node handle
-    ros::init(argc, argv, "universal_robot", ros::init_options::AnonymousName);
-    ros::NodeHandle rosNodeHandle;
+    cisst_ral::ral ral(argc, argv, "universal_robot");
+    auto rosNode = ral.node();
 
     // parse options
     cmnCommandLineOptions options;
@@ -115,7 +114,7 @@ int main(int argc, char * argv[])
 
     // ROS CRTK bridge
     mts_ros_crtk_bridge_provided * crtk_bridge
-        = new mts_ros_crtk_bridge_provided("ur_crtk_bridge", &rosNodeHandle);
+        = new mts_ros_crtk_bridge_provided("ur_crtk_bridge", rosNode);
     crtk_bridge->bridge_interface_provided(ur->GetName(),
                                            "control",
                                            "", // ros sub namespace
@@ -129,7 +128,7 @@ int main(int argc, char * argv[])
         .AddSubscriberToCommandVoid
         ("control", "SetRobotRunningMode", "SetRobotRunningMode");
     crtk_bridge->subscribers_bridge()
-        .AddSubscriberToCommandWrite<vctFrm3, geometry_msgs::PoseStamped>
+        .AddSubscriberToCommandWrite<vctFrm3, CISST_RAL_MSG(geometry_msgs, PoseStamped)>
         ("control", "SetToolFrame", "SetToolFrame");
 
     componentManager->AddComponent(crtk_bridge);
@@ -153,11 +152,15 @@ int main(int argc, char * argv[])
     tabWidget->show();
     application.exec();
 
+    // stop all logs
+    cmnLogger::Kill();
+
+    // stop ROS node
+    cisst_ral::shutdown();
+
     // kill all components and perform cleanup
     componentManager->KillAllAndWait(5.0 * cmn_s);
     componentManager->Cleanup();
-
-    cmnLogger::Kill();
 
     return 0;
 }

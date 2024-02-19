@@ -1,0 +1,4 @@
+{
+  "name": "universal_robot",
+  "dependencies": ["cisst_ros_crtk", "sawUniversalRobotCore"]
+}
