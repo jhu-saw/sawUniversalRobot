@@ -29,6 +29,10 @@ the ROS node, make sure you use `catkin build`.  For ROS 2, see https://github.c
  * Qt for user interface
  * ROS 1 or 2 (optional)
 
+# Build
+
+See https://github.com/jhu-saw/vcs for download and build instructions.  Use the VCS files for `universal-robot`.
+
 # Running the examples
 
 ## ROS
