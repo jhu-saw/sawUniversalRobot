@@ -23,7 +23,7 @@ def log():
 import cisstMultiTaskPython as cisstMultiTask
 import numpy
 
-LCM = cisstMultiTask.mtsManagerLocal_GetInstance()
+LCM = cisstMultiTask.mtsManagerLocal.GetInstance()
 print 'Creating UR client'
 URclient = cisstMultiTask.mtsComponentWithManagement('URclient')
 LCM.AddComponent(URclient)
@@ -31,9 +31,9 @@ LCM.CreateAll()
 LCM.StartAll()
 
 Manager = URclient.GetManagerComponentServices()
-print 'Loading sawUniversalRobotController'
-if not Manager.Load('sawUniversalRobotController'):
-    print 'Failed to load sawUniversalRobotController (see cisstLog.txt)'
+print 'Loading sawUniversalRobot'
+if not Manager.Load('sawUniversalRobot'):
+    print 'Failed to load sawUniversalRobot (see cisstLog.txt)'
 
 print 'Creating UR server (mtsUniversalRobotScriptRT)'
 # Or, could use LCM.CreateComponentDynamically
