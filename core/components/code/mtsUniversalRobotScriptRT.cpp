@@ -4,7 +4,7 @@
 /*
   Author(s): Peter Kazanzides, H. Tutkun Sen, Shuyang Chen
 
-  (C) Copyright 2016-2023 Johns Hopkins University (JHU), All Rights Reserved.
+  (C) Copyright 2016-2024 Johns Hopkins University (JHU), All Rights Reserved.
 
 --- begin cisst license - do not edit ---
 
@@ -297,23 +297,16 @@ void mtsUniversalRobotScriptRT::Init(void)
     m_configuration_j.Name().at(4) = "wrist_2_joint";
     m_configuration_j.Name().at(5) = "wrist_3_joint";
     m_configuration_j.Type().SetSize(NB_Actuators);
-    m_configuration_j.Type().SetAll(PRM_JOINT_REVOLUTE);
+    m_configuration_j.Type().SetAll(CMN_JOINT_REVOLUTE);
 
     // Actual joint state (measured values)
-    m_measured_js.Name().SetSize(NB_Actuators);
-    m_measured_js.Name()[0] = "shoulder_pan_joint";
-    m_measured_js.Name()[1] = "shoulder_lift_joint";
-    m_measured_js.Name()[2] = "elbow_joint";
-    m_measured_js.Name()[3] = "wrist_1_joint";
-    m_measured_js.Name()[4] = "wrist_2_joint";
-    m_measured_js.Name()[5] = "wrist_3_joint";
+    m_measured_js.Name().ForceAssign(m_configuration_j.Name());
     std::cerr << CMN_LOG_DETAILS << " need to add joint configuration with names, type and maybe limits?  Can we retrieve these via API?" << std::endl;
-    // m_measured_js.Type().SetSize(NB_Actuators, PRM_JOINT_REVOLUTE);
     m_measured_js.Position().SetSize(NB_Actuators, 0.0);
     m_measured_js.Velocity().SetSize(NB_Actuators, 0.0);
     m_measured_js.Effort().SetSize(NB_Actuators, 0.0);
     // Desired joint state (commanded values)
-    m_setpoint_js.Name().ForceAssign(m_measured_js.Name());
+    m_setpoint_js.Name().ForceAssign(m_configuration_j.Name());
     m_setpoint_js.Position().ForceAssign(m_measured_js.Position());
     m_setpoint_js.Velocity().ForceAssign(m_measured_js.Velocity());
     m_setpoint_js.Effort().ForceAssign(m_measured_js.Effort());
