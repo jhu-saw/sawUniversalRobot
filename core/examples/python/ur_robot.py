@@ -6,8 +6,8 @@ import os, sys, ctypes
 try:
    flags = sys.getdlopenflags()
    sys.setdlopenflags(flags | ctypes.RTLD_GLOBAL)
-except AttributeError, e:
-    print 'Skipping dlopen flags, ', e
+except AttributeError as e:
+    print('Skipping dlopen flags, ' + str(e))
 
 import cisstCommonPython as cisstCommon
 
@@ -25,33 +25,33 @@ import cisstParameterTypesPython as cisstParameterTypes
 import numpy
 
 LCM = cisstMultiTask.mtsManagerLocal.GetInstance()
-print 'Creating UR client'
+print('Creating UR client')
 URclient = cisstMultiTask.mtsComponentWithManagement('URclient')
 LCM.AddComponent(URclient)
 LCM.CreateAll()
 LCM.StartAll()
 
 Manager = URclient.GetManagerComponentServices()
-print 'Loading sawUniversalRobot'
+print('Loading sawUniversalRobot')
 if not Manager.Load('sawUniversalRobot'):
-    print 'Failed to load sawUniversalRobot (see cisstLog.txt)'
+    print('Failed to load sawUniversalRobot (see cisstLog.txt)')
 
-print 'Creating UR server (mtsUniversalRobotScriptRT)'
+print('Creating UR server (mtsUniversalRobotScriptRT)')
 arg = cisstMultiTask.mtsTaskContinuousConstructorArg('URserver', 256, True)
 URserver = LCM.CreateComponentDynamically('mtsUniversalRobotScriptRT', arg)
 if URserver:
-   print 'Component created'
+   print('Component created')
    LCM.AddComponent(URserver)
-   print 'Configuring UR server.'
+   print('Configuring UR server.')
    ipAddr = raw_input('Enter IP address: ')
    URserver.Configure(ipAddr)
    URserver.Create()
 
-   print 'Connecting UR client to UR server'
+   print('Connecting UR client to UR server')
    # robot is the required interface
    robot = URclient.AddInterfaceRequiredAndConnect(('URserver', 'control'))
 
-   print 'Starting UR server'
+   print('Starting UR server')
    URserver.Start()
 
-   print 'System ready. Type dir(robot) to see available commands.'
+   print('System ready. Type dir(robot) to see available commands.')
