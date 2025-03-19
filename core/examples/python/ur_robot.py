@@ -21,6 +21,7 @@ def log():
    os.system('tail cisstLog.txt')
 
 import cisstMultiTaskPython as cisstMultiTask
+import cisstParameterTypesPython as cisstParameterTypes
 import numpy
 
 LCM = cisstMultiTask.mtsManagerLocal.GetInstance()
@@ -36,19 +37,21 @@ if not Manager.Load('sawUniversalRobot'):
     print 'Failed to load sawUniversalRobot (see cisstLog.txt)'
 
 print 'Creating UR server (mtsUniversalRobotScriptRT)'
-# Or, could use LCM.CreateComponentDynamically
-Manager.ComponentCreate('mtsUniversalRobotScriptRT', 'URserver')
-URserver = LCM.GetComponent('URserver')
-print 'Configuring UR server.'
-ipAddr = raw_input('Enter IP address: ')
-URserver.Configure(ipAddr)
-URserver.Create()
+arg = cisstMultiTask.mtsTaskContinuousConstructorArg('URserver', 256, True)
+URserver = LCM.CreateComponentDynamically('mtsUniversalRobotScriptRT', arg)
+if URserver:
+   print 'Component created'
+   LCM.AddComponent(URserver)
+   print 'Configuring UR server.'
+   ipAddr = raw_input('Enter IP address: ')
+   URserver.Configure(ipAddr)
+   URserver.Create()
 
-print 'Connecting UR client to UR server'
-# robot is the required interface
-robot = URclient.AddInterfaceRequiredAndConnect(('URserver', 'control'))
+   print 'Connecting UR client to UR server'
+   # robot is the required interface
+   robot = URclient.AddInterfaceRequiredAndConnect(('URserver', 'control'))
 
-print 'Starting UR server'
-URserver.Start()
+   print 'Starting UR server'
+   URserver.Start()
 
-print 'System ready. Type dir(robot) to see available commands.'
+   print 'System ready. Type dir(robot) to see available commands.'
