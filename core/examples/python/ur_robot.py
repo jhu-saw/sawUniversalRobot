@@ -25,33 +25,24 @@ import cisstParameterTypesPython as cisstParameterTypes
 import numpy
 
 LCM = cisstMultiTask.mtsManagerLocal.GetInstance()
-print('Creating UR client')
-URclient = cisstMultiTask.mtsComponentWithManagement('URclient')
-LCM.AddComponent(URclient)
 LCM.CreateAll()
 LCM.StartAll()
 
-Manager = URclient.GetManagerComponentServices()
-print('Loading sawUniversalRobot')
-if not Manager.Load('sawUniversalRobot'):
-    print('Failed to load sawUniversalRobot (see cisstLog.txt)')
-
-print('Creating UR server (mtsUniversalRobotScriptRT)')
 arg = cisstMultiTask.mtsTaskContinuousConstructorArg('URserver', 256, True)
-URserver = LCM.CreateComponentDynamically('mtsUniversalRobotScriptRT', arg)
+URserver = cisstMultiTask.mtsLoadAndCreateServer('sawUniversalRobot',
+                                                 'mtsUniversalRobotScriptRT',
+                                                 'URserver', arg)
 if URserver:
-   print('Component created')
-   LCM.AddComponent(URserver)
    print('Configuring UR server.')
-   ipAddr = raw_input('Enter IP address: ')
+   # Python2 uses raw_input and Python3 uses input
+   try:
+       ipAddr = raw_input('Enter IP address: ')
+   except NameError:
+       ipAddr = input('Enter IP address: ')
    URserver.Configure(ipAddr)
-   URserver.Create()
-
-   print('Connecting UR client to UR server')
    # robot is the required interface
-   robot = URclient.AddInterfaceRequiredAndConnect(('URserver', 'control'))
+   robot = cisstMultiTask.mtsCreateClientInterface('URclient', 'URserver', 'control')
 
-   print('Starting UR server')
-   URserver.Start()
-
-   print('System ready. Type dir(robot) to see available commands.')
+LCM.CreateAllAndWait(2.0)
+LCM.StartAllAndWait(2.0)
+print('System ready. Type dir(robot) to see available commands.')
