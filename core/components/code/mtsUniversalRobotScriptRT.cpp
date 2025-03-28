@@ -289,7 +289,7 @@ void mtsUniversalRobotScriptRT::Init(void)
     expectedPeriod = 0.008;   // Default for CB2/CB3
 
     // Joint Configuration
-    m_configuration_j.Name().SetSize(NB_Actuators);
+    m_configuration_j.Name().resize(NB_Actuators);
     m_configuration_j.Name().at(0) = "shoulder_pan_joint";
     m_configuration_j.Name().at(1) = "shoulder_lift_joint";
     m_configuration_j.Name().at(2) = "elbow_joint";
@@ -300,13 +300,13 @@ void mtsUniversalRobotScriptRT::Init(void)
     m_configuration_j.Type().SetAll(CMN_JOINT_REVOLUTE);
 
     // Actual joint state (measured values)
-    m_measured_js.Name().ForceAssign(m_configuration_j.Name());
+    cmnDataCopy(m_measured_js.Name(), m_configuration_j.Name());
     std::cerr << CMN_LOG_DETAILS << " need to add joint configuration with names, type and maybe limits?  Can we retrieve these via API?" << std::endl;
     m_measured_js.Position().SetSize(NB_Actuators, 0.0);
     m_measured_js.Velocity().SetSize(NB_Actuators, 0.0);
     m_measured_js.Effort().SetSize(NB_Actuators, 0.0);
     // Desired joint state (commanded values)
-    m_setpoint_js.Name().ForceAssign(m_configuration_j.Name());
+    cmnDataCopy(m_setpoint_js.Name(), m_configuration_j.Name());
     m_setpoint_js.Position().ForceAssign(m_measured_js.Position());
     m_setpoint_js.Velocity().ForceAssign(m_measured_js.Velocity());
     m_setpoint_js.Effort().ForceAssign(m_measured_js.Effort());
