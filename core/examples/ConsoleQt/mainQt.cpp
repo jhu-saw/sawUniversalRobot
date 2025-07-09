@@ -5,7 +5,7 @@
   Author(s):  Anton Deguet, Peter Kazanzides
   Created on: 2017-02-22
 
-  (C) Copyright 2017-2024 Johns Hopkins University (JHU), All Rights Reserved.
+  (C) Copyright 2017-2023 Johns Hopkins University (JHU), All Rights Reserved.
 
 --- begin cisst license - do not edit ---
 
@@ -16,6 +16,13 @@ http://www.cisst.org/cisst/license.txt.
 --- end cisst license ---
 */
 
+/*
+ NOTES:
+   (1) This is based on the ROS example universal_robot.cpp
+   (2) With the adoption of CRTK, this could become a generic robot interface,
+       rather than just for the Universal Robot.
+*/
+
 #include <cisstCommon/cmnPath.h>
 #include <cisstCommon/cmnUnits.h>
 #include <cisstCommon/cmnCommandLineOptions.h>
@@ -24,9 +31,6 @@ http://www.cisst.org/cisst/license.txt.
 #include <cisstMultiTask/mtsSystemQtWidget.h>
 #include <cisstParameterTypes/prmStateRobotQtWidget.h>
 #include <sawUniversalRobot/mtsUniversalRobotScriptRT.h>
-
-#include <cisst_ros_bridge/mtsROSBridge.h>
-#include <cisst_ros_crtk/mts_ros_crtk_bridge_provided.h>
 
 #include <QApplication>
 #include <QMainWindow>
@@ -41,27 +45,15 @@ int main(int argc, char * argv[])
     cmnLogger::SetMaskClassMatching("mtsUniversalRobot", CMN_LOG_ALLOW_ALL);
     cmnLogger::AddChannel(std::cerr, CMN_LOG_ALLOW_ERRORS_AND_WARNINGS);
 
-    // create ROS node handle
-    cisst_ral::ral ral(argc, argv, "universal_robot");
-    auto rosNode = ral.node();
-
     // parse options
     cmnCommandLineOptions options;
     std::string ipAddress;
-    double rosPeriod = 10.0 * cmn_ms;
-    double tfPeriod = 20.0 * cmn_ms;
 
     options.AddOptionOneValue("i", "ip-address",
                               "IP address for the UR controller",
                               cmnCommandLineOptions::REQUIRED_OPTION, &ipAddress);
     options.AddOptionNoValue("D", "dark-mode",
                              "replaces the default Qt palette with darker colors");
-    options.AddOptionOneValue("p", "ros-period",
-                              "period in seconds to read all tool positions (default 0.01, 10 ms, 100Hz).  There is no point to have a period higher than the UR component",
-                              cmnCommandLineOptions::OPTIONAL_OPTION, &rosPeriod);
-    options.AddOptionOneValue("P", "tf-ros-period",
-                              "period in seconds to read all components and broadcast tf2 (default 0.02, 20 ms, 50Hz).  There is no point to have a period higher than the UR's period",
-                              cmnCommandLineOptions::OPTIONAL_OPTION, &tfPeriod);
 
     std::list<std::string> managerConfig;
     options.AddOptionMultipleValues("m", "component-manager",
@@ -112,32 +104,6 @@ int main(int argc, char * argv[])
                               ur->GetName(), "control");
     tabWidget->addTab(systemWidget, "System");
 
-    // ROS CRTK bridge
-    mts_ros_crtk_bridge_provided * crtk_bridge
-        = new mts_ros_crtk_bridge_provided("ur_crtk_bridge", rosNode);
-    crtk_bridge->bridge_interface_provided(ur->GetName(),
-                                           "control",
-                                           "", // ros sub namespace
-                                           rosPeriod, tfPeriod);
-
-    // extra subscribers
-    crtk_bridge->subscribers_bridge()
-        .AddSubscriberToCommandVoid
-        ("control", "SetRobotFreeDriveMode", "SetRobotFreeDriveMode");
-    crtk_bridge->subscribers_bridge()
-        .AddSubscriberToCommandVoid
-        ("control", "SetRobotRunningMode", "SetRobotRunningMode");
-    crtk_bridge->subscribers_bridge()
-        .AddSubscriberToCommandWrite<vctFrm3, CISST_RAL_MSG(geometry_msgs, PoseStamped)>
-        ("control", "SetToolFrame", "SetToolFrame");
-
-    componentManager->AddComponent(crtk_bridge);
-    crtk_bridge->Connect();
-    componentManager->Connect(crtk_bridge->subscribers_bridge().GetName(),
-                              "control",
-                              ur->GetName(),
-                              "control");
-
     // custom user component
     if (!componentManager->ConfigureJSON(managerConfig)) {
         CMN_LOG_INIT_ERROR << "Configure: failed to configure component-manager, check cisstLog for error messages" << std::endl;
@@ -152,15 +118,11 @@ int main(int argc, char * argv[])
     tabWidget->show();
     application.exec();
 
-    // stop all logs
-    cmnLogger::Kill();
-
-    // stop ROS node
-    cisst_ral::shutdown();
-
     // kill all components and perform cleanup
     componentManager->KillAllAndWait(5.0 * cmn_s);
     componentManager->Cleanup();
+
+    cmnLogger::Kill();
 
     return 0;
 }

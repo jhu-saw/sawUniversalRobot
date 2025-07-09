@@ -1,0 +1,4 @@
+{
+  "name": "sawUniversalRobotCore",
+  "dependencies": ["cisst"]
+}

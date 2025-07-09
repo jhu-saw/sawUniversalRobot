@@ -4,7 +4,7 @@
 /*
   Author(s): Peter Kazanzides, H. Tutkun Sen, Shuyang Chen
 
-  (C) Copyright 2016-2019 Johns Hopkins University (JHU), All Rights Reserved.
+  (C) Copyright 2016-2024 Johns Hopkins University (JHU), All Rights Reserved.
 
 --- begin cisst license - do not edit ---
 
@@ -19,6 +19,7 @@ http://www.cisst.org/cisst/license.txt.
 #include <stdlib.h>
 
 #include <cisstCommon/cmnPortability.h>
+#include <cisstCommon/cmnUnits.h>
 
 #if (CISST_OS == CISST_WINDOWS)
 typedef unsigned __int32 uint32_t;
@@ -99,16 +100,41 @@ struct packet_30_31 {
 #pragma pack(pop)
 
 #pragma pack(push, 1)
-struct packet_32_34 : packet_30_31 {
+// Versions 3.2-3.4
+struct packet_32_34 : public packet_30_31 {
     unsigned long long digital_Output; // Digital outputs
     double program_State;     // Program state
 };
 #pragma pack(pop)
 
 #pragma pack(push, 1)
-struct packet_35 : packet_32_34 {
+// Versions 3.5-3.9 and 5.0-5.3
+struct packet_35_39_50_53 : public packet_32_34 {
     double elbow_position[3];
     double elbow_velocity[3];
+};
+#pragma pack(pop)
+
+#pragma pack(push, 1)
+// Versions 3.10-3.13 and 5.4-5.8
+struct packet_310_313_54_58 : public packet_35_39_50_53 {
+    double safety_status;
+};
+#pragma pack(pop)
+
+#pragma pack(push, 1)
+// Versions 3.14-3.15 and 5.9
+struct packet_314_315_59 : public packet_310_313_54_58 {
+    double blank5[3];   // Used by Universal Robots software only
+};
+#pragma pack(pop)
+
+#pragma pack(push, 1)
+// Version 5.10
+struct packet_510 : public packet_314_315_59 {
+    double payload_mass;        // payload mass, kg
+    double payload_cog[3];      // payload center of gravity, m
+    double payload_inertia[6];  // Ixx, Iyy, Izz, Ixy, Ixz, Iyz, kg*m^2
 };
 #pragma pack(pop)
 
@@ -120,9 +146,33 @@ unsigned long mtsUniversalRobotScriptRT::PacketLength[VER_MAX] = {
      812,  // VER_18
     1044,  // VER_30_31
     1060,  // VER_32_34
-    1108   // VER_35
+    1108,  // VER_35_39   (or VER_50_53)
+    1116,  // VER_310_313 (or VER_54_58)
+    1140,  // VER_314_315 (or VER_59)
+       0,  // VER_3_NEW
+    1108,  // VER_50_53
+    1116,  // VER_54_58
+    1140,  // VER_59
+    1220,  // VER_510
+       0   // VER_5_NEW
 };
 
+char *mtsUniversalRobotScriptRT::VersionName[VER_MAX] = {
+    "Unknown",
+    "Pre-1.8",
+    "1.8",
+    "3.0-3.1",
+    "3.2-3.4",
+    "3.5-3.9",
+    "3.10-3.13",
+    "3.14-3.15",
+    "3.+",
+    "5.0-5.3",
+    "5.4-5.8",
+    "5.9",
+    "5.10",
+    "5.+"
+};
 
 // Static methods
 std::string mtsUniversalRobotScriptRT::RobotModeName(int mode, int version)
@@ -143,8 +193,8 @@ std::string mtsUniversalRobotScriptRT::RobotModeName(int mode, int version)
         else
             str.assign("INVALID");
     }
-    else if ((version >= VER_30_31) && (version <= VER_35)) {
-        // Controller Box 3 (CB3), also includes CB3.1
+    else if ((version >= VER_30_31) && (version < VER_MAX)) {
+        // Controller Box 3 (CB3), also includes CB3.1, and 5 (e-Series)
         if ((mode >= ROBOT_MODE_DISCONNECTED) && (mode <= ROBOT_MODE_UPDATING_FIRMWARE))
             str.assign(namesCB3[mode]);
         else
@@ -156,17 +206,21 @@ std::string mtsUniversalRobotScriptRT::RobotModeName(int mode, int version)
     return str;
 }
 
+// Note that "READY_FOR_POWER_OFF" is replaced by "EMERGENCY_STOPPED" for older versions
+// (see Startup method). Previously, "VIOLATION" was called "SECURITY_STOPPED", but this
+// seems to just be a terminology change.
+char *mtsUniversalRobotScriptRT::JointModeNames[JOINT_MODE_IDLE-JOINT_MODE_RESET+1] =
+           { "RESET", "SHUTTING_DOWN", "PART_D_CALIBRATION", "BACKDRIVE", "POWER_OFF",
+             "READY_FOR_POWER_OFF", "CALVAL_INITIALIZATION", "ERROR",
+             "FREEDRIVE", "SIMULATED", "NOT_RESPONDING", "MOTOR_INITIALISATION",
+             "BOOTING", "PART_D_CALIBRATION_ERROR", "BOOTLOADER", "CALIBRATION",
+             "VIOLATION", "FAULT", "RUNNING", "INITIALISATION", "IDLE" };
+
 std::string mtsUniversalRobotScriptRT::JointModeName(int mode)
 {
-    static const char *names[] = { "SHUTTING_DOWN", "PART_D_CALIBRATION", "BACKDRIVE", "POWER_OFF",
-                                   "EMERGENCY_STOPPED", "CALVAL_INITIALIZATION", "ERROR",
-                                   "FREEDRIVE", "SIMULATED", "NOT_RESPONDING", "MOTOR_INITIALISATION",
-                                   "BOOTING", "PART_D_CALIBRATION_ERROR", "BOOTLOADER", "CALIBRATION",
-                                   "SECURITY_STOPPED", "FAULT", "RUNNING", "INITIALISATION", "IDLE" };
-
     std::string str;
-    if ((mode >= JOINT_SHUTTING_DOWN_MODE) && (mode <= JOINT_IDLE_MODE))
-        str.assign(names[mode-JOINT_SHUTTING_DOWN_MODE]);
+    if ((mode >= JOINT_MODE_RESET) && (mode <= JOINT_MODE_IDLE))
+        str.assign(JointModeNames[mode-JOINT_MODE_RESET]);
     else
         str.assign("INVALID");
     return str;
@@ -176,10 +230,10 @@ std::string mtsUniversalRobotScriptRT::SafetyModeName(int mode)
 {
     static const char *names[] = { "UNKNOWN", "NORMAL", "REDUCED", "PROTECTIVE_STOP", "RECOVERY",
                                    "SAFEGUARD_STOP", "SYSTEM_EMERGENCY_STOP", "ROBOT_EMERGENCY_STOP",
-                                   "VIOLATION", "FAULT" };
+                                   "VIOLATION", "FAULT", "VALIDATE_JOINT_ID", "UNDEFINED" };
 
     std::string str;
-    if (mode <= SAFETY_MODE_FAULT)
+    if (mode <= SAFETY_MODE_UNDEFINED_SAFETY_MODE)
         str.assign(names[mode]);
     else
         str.assign("INVALID");
@@ -188,13 +242,17 @@ std::string mtsUniversalRobotScriptRT::SafetyModeName(int mode)
 
 // Constructor
 mtsUniversalRobotScriptRT::mtsUniversalRobotScriptRT(const std::string &name, unsigned int sizeStateTable, bool newThread) :
-    mtsTaskContinuous(name, sizeStateTable, newThread), buffer_idx(0), version(VER_UNKNOWN)
+    mtsTaskContinuous(name, sizeStateTable, newThread),
+    ConfigurationStateTable(100, "Configuration"),
+    buffer_idx(0), version(VER_UNKNOWN)
 {
     Init();
 }
 
 mtsUniversalRobotScriptRT::mtsUniversalRobotScriptRT(const mtsTaskContinuousConstructorArg &arg) :
-    mtsTaskContinuous(arg), buffer_idx(0), version(VER_UNKNOWN)
+    mtsTaskContinuous(arg),
+    ConfigurationStateTable(100, "Configuration"),
+    buffer_idx(0), version(VER_UNKNOWN)
 {
     Init();
 }
@@ -217,74 +275,76 @@ void mtsUniversalRobotScriptRT::Init(void)
     robotMode = ROBOT_MODE_NO_CONTROLLER;
     jointModes.SetAll(0);  // Not a valid joint mode
     safetyMode = SAFETY_MODE_UNKNOWN;
+    payload = 0.0;
     isPowerOn = false;
     isEStop = false;
     isSecurityStop = false;
     isMotionActive = false;
-    JointPos.SetSize(NB_Actuators);
-    JointPos.SetAll(0.0);
-    JointPosParam.SetSize(NB_Actuators);
-    JointTargetPos.SetSize(NB_Actuators);
-    JointTargetPos.SetAll(0.0);
-    JointVel.SetSize(NB_Actuators);
-    JointVel.SetAll(0.0);
-    JointVelParam.SetSize(NB_Actuators);
-    JointTargetVel.SetSize(NB_Actuators);
-    JointTargetVel.SetAll(0.0);
-    JointEffort.SetSize(NB_Actuators);
-    JointEffort.SetAll(0.0);
-    JointTargetEffort.SetSize(NB_Actuators);
-    JointTargetEffort.SetAll(0.0);
+
+    pversion.major = 0;
+    pversion.minor = 0;
+    pversion.bugfix = 0;
+
+    ticksPerSec = 125;        // Default for CB2/CB3
+    expectedPeriod = 0.008;   // Default for CB2/CB3
+
+    // Joint Configuration
+    m_configuration_j.Name().resize(NB_Actuators);
+    m_configuration_j.Name().at(0) = "shoulder_pan_joint";
+    m_configuration_j.Name().at(1) = "shoulder_lift_joint";
+    m_configuration_j.Name().at(2) = "elbow_joint";
+    m_configuration_j.Name().at(3) = "wrist_1_joint";
+    m_configuration_j.Name().at(4) = "wrist_2_joint";
+    m_configuration_j.Name().at(5) = "wrist_3_joint";
+    m_configuration_j.Type().SetSize(NB_Actuators);
+    m_configuration_j.Type().SetAll(CMN_JOINT_REVOLUTE);
 
     // Actual joint state (measured values)
-    JointState.Name().SetSize(NB_Actuators);
-    JointState.Name()[0] = "shoulder_pan_joint";
-    JointState.Name()[1] = "shoulder_lift_joint";
-    JointState.Name()[2] = "elbow_joint";
-    JointState.Name()[3] = "wrist_1_joint";
-    JointState.Name()[4] = "wrist_2_joint";
-    JointState.Name()[5] = "wrist_3_joint";
-    JointState.Type().SetSize(NB_Actuators);
-    JointState.Type().SetAll(PRM_JOINT_REVOLUTE);
-    JointState.Position().ForceAssign(JointPos);
-    JointState.Velocity().ForceAssign(JointVel);
-    JointState.Effort().ForceAssign(JointEffort);
+    cmnDataCopy(m_measured_js.Name(), m_configuration_j.Name());
+    std::cerr << CMN_LOG_DETAILS << " need to add joint configuration with names, type and maybe limits?  Can we retrieve these via API?" << std::endl;
+    m_measured_js.Position().SetSize(NB_Actuators, 0.0);
+    m_measured_js.Velocity().SetSize(NB_Actuators, 0.0);
+    m_measured_js.Effort().SetSize(NB_Actuators, 0.0);
     // Desired joint state (commanded values)
-    JointStateDesired.Name().SetSize(NB_Actuators);
-    JointStateDesired.Name().Assign(JointState.Name());
-    JointStateDesired.Type().SetSize(NB_Actuators);
-    JointStateDesired.Type().SetAll(PRM_JOINT_REVOLUTE);
-    JointStateDesired.Position().ForceAssign(JointTargetPos);
-    JointStateDesired.Velocity().ForceAssign(JointTargetVel);
-    JointStateDesired.Effort().ForceAssign(JointTargetEffort);
+    cmnDataCopy(m_setpoint_js.Name(), m_configuration_j.Name());
+    m_setpoint_js.Position().ForceAssign(m_measured_js.Position());
+    m_setpoint_js.Velocity().ForceAssign(m_measured_js.Velocity());
+    m_setpoint_js.Effort().ForceAssign(m_measured_js.Effort());
+    // cartesian data
     TCPSpeed.SetAll(0.0);
     TCPForce.SetAll(0.0);
+    setpointCP.SetAll(0.0);
     jtpos.SetSize(NB_Actuators);
     jtvel.SetSize(NB_Actuators);
     debug.SetAll(0.0);
+
+    // Populate state tables
     StateTable.AddData(ControllerTime, "ControllerTime");
     StateTable.AddData(ControllerExecTime, "ControllerExecTime");
     StateTable.AddData(robotMode, "RobotMode");
     StateTable.AddData(jointModes, "JointModes");
     StateTable.AddData(safetyMode, "SafetyMode");
+    StateTable.AddData(payload, "Payload");
     StateTable.AddData(isPowerOn, "IsPowerOn");
     StateTable.AddData(isEStop, "IsEStop");
     StateTable.AddData(isSecurityStop, "IsSecurityStop");
     StateTable.AddData(isMotionActive, "IsMotionActive");
-    StateTable.AddData(JointPos, "PositionJoint");
-    StateTable.AddData(JointPosParam, "PositionJointParam");
-    StateTable.AddData(JointTargetPos, "PositionTargetJoint");
-    StateTable.AddData(JointVel, "VelocityJoint");
-    StateTable.AddData(JointVelParam, "VelocityJointParam");
-    StateTable.AddData(JointTargetVel, "VelocityTargetJoint");
-    StateTable.AddData(JointState, "JointState");
-    StateTable.AddData(JointStateDesired, "JointStateDesired");
-    StateTable.AddData(CartPos, "PositionCartesian");
+    StateTable.AddData(m_measured_js, "measured_js");
+    StateTable.AddData(m_setpoint_js, "setpoint_js");
+    StateTable.AddData(m_measured_cp, "measured_cp");
+    StateTable.AddData(m_setpoint_cp, "setpoint_cp");
     StateTable.AddData(TCPSpeed, "VelocityCartesian");
-    StateTable.AddData(CartVelParam, "VelocityCartesianParam");
+    StateTable.AddData(m_measured_cv, "measured_cv");
+    StateTable.AddData(m_setpoint_cv, "setpoint_cv");
     StateTable.AddData(TCPForce, "ForceCartesianForce");
-    StateTable.AddData(WrenchGet, "ForceCartesianParam");
+    StateTable.AddData(m_measured_cf, "measured_cf");
     StateTable.AddData(debug, "Debug");
+
+    AddStateTable(&ConfigurationStateTable);
+    ConfigurationStateTable.SetAutomaticAdvance(false);
+    ConfigurationStateTable.Start();
+    ConfigurationStateTable.Advance();
+    ConfigurationStateTable.AddData(m_configuration_j, "configuration_j");
 
     mInterface = AddInterfaceProvided("control");
     if (mInterface) {
@@ -292,19 +352,25 @@ void mtsUniversalRobotScriptRT::Init(void)
         mInterface->AddMessageEvents();
 
         // Standard interfaces (same as dVRK)
-        mInterface->AddCommandReadState(this->StateTable, JointPosParam, "GetPositionJoint");
-        mInterface->AddCommandReadState(this->StateTable, JointTargetPos, "GetPositionJointDesired");
-        mInterface->AddCommandReadState(this->StateTable, JointVelParam, "GetVelocityJoint");
-        mInterface->AddCommandReadState(this->StateTable, JointTargetVel, "GetVelocityJointDesired");
-        mInterface->AddCommandReadState(this->StateTable, JointState, "GetStateJoint");
-        mInterface->AddCommandReadState(this->StateTable, JointStateDesired, "GetStateJointDesired");
-        mInterface->AddCommandReadState(this->StateTable, CartPos, "GetPositionCartesian");
-        mInterface->AddCommandReadState(this->StateTable, CartVelParam, "GetVelocityCartesian");
-        mInterface->AddCommandReadState(this->StateTable, WrenchGet, "GetWrenchBody");
-        mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::JointVelocityMove, this, "JointVelocityMove");
-        mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::JointPositionMove, this, "JointPositionMove");
-        mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::CartesianPositionMove,this, "CartesianPositionMove");
-        mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::CartesianVelocityMove,this, "CartesianVelocityMove");
+        mInterface->AddCommandReadState(this->StateTable, m_measured_js, "measured_js");
+        mInterface->AddCommandReadState(this->StateTable, m_setpoint_js, "setpoint_js");
+        mInterface->AddCommandReadState(this->StateTable, m_measured_cp, "measured_cp");
+        mInterface->AddCommandReadState(this->StateTable, m_setpoint_cp, "setpoint_cp");
+        mInterface->AddCommandReadState(this->StateTable, m_measured_cv, "measured_cv");
+        mInterface->AddCommandReadState(this->StateTable, m_setpoint_cv, "setpoint_cv");
+        mInterface->AddCommandReadState(this->StateTable, m_measured_cf, "measured_cf");
+        mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::servo_jv,
+                                    this, "servo_jv");
+        mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::move_jp,
+                                    this, "move_jp");
+        mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::servo_cv,
+                                    this, "servo_cv");
+        mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::move_cp,
+                                    this, "move_cp");
+        mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::move_cr,
+                                    this, "move_cr");
+
+        mInterface->AddCommandReadState(this->ConfigurationStateTable, m_configuration_j, "configuration_js");
 
         // Following are not yet standardized
         mInterface->AddCommandReadState(StateTable, ControllerTime, "GetControllerTime");
@@ -312,6 +378,7 @@ void mtsUniversalRobotScriptRT::Init(void)
         mInterface->AddCommandReadState(StateTable, robotMode, "GetRobotMode");
         mInterface->AddCommandReadState(StateTable, jointModes, "GetJointModes");
         mInterface->AddCommandReadState(StateTable, safetyMode, "GetSafetyMode");
+        mInterface->AddCommandReadState(StateTable, payload, "GetPayload");
         mInterface->AddCommandReadState(StateTable, isPowerOn, "IsMotorPowerOn");
         mInterface->AddCommandReadState(StateTable, isEStop, "IsEStop");
         mInterface->AddCommandReadState(StateTable, isSecurityStop, "IsSecurityStop");
@@ -326,6 +393,7 @@ void mtsUniversalRobotScriptRT::Init(void)
         mInterface->AddCommandVoid(&mtsUniversalRobotScriptRT::SetRobotFreeDriveMode, this, "SetRobotFreeDriveMode");
         mInterface->AddCommandReadState(StateTable, debug, "GetDebug");
         mInterface->AddCommandRead(&mtsUniversalRobotScriptRT::GetVersion, this, "GetVersion");
+        mInterface->AddCommandRead(&mtsUniversalRobotScriptRT::GetVersionString, this, "GetVersionString");
         mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::SetGravity, this, "SetGravity");
         mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::SetPayload, this, "SetPayload");
         mInterface->AddCommandWrite(&mtsUniversalRobotScriptRT::SetToolFrame, this, "SetToolFrame");
@@ -342,6 +410,8 @@ void mtsUniversalRobotScriptRT::Init(void)
         // Stats
         mInterface->AddCommandReadState(StateTable, StateTable.PeriodStats,
                                         "GetPeriodStatistics");
+        mInterface->AddCommandReadState(StateTable, StateTable.PeriodStats,
+                                        "period_statistics");   // Used by mtsSystemQtWidget
     }
 
     for (size_t i = 0; i < VER_MAX; i++)
@@ -374,9 +444,6 @@ void mtsUniversalRobotScriptRT::Configure(const std::string &ipAddr)
             CMN_LOG_CLASS_INIT_ERROR << "Socket not connected to dashboard server" << std::endl;
         }
     }
-
-//    std::string pver;
-//    GetPolyscopeVersion(pver);
 }
 
 void mtsUniversalRobotScriptRT::Startup(void)
@@ -388,21 +455,21 @@ void mtsUniversalRobotScriptRT::Startup(void)
     } else {
         mInterface->SendError(this->GetName() + ": socket not connected, IP: " + ipAddress);
     }
-
-//    std::string pver;
-//    GetPolyscopeVersion(pver);
+    ReadPolyscopeVersion();
+    // JOINT_EMERGENCY_STOPPED_MODE was prior to Version 5.1
+    if ((pversion.major < 5) || ((pversion.major == 5) && (pversion.minor == 0)))
+        JointModeNames[JOINT_EMERGENCY_STOPPED_MODE] = "EMERGENCY_STOPPED";
 }
 
 void mtsUniversalRobotScriptRT::Run(void)
 {
-    // mark all data as invalid
-    JointPosParam.SetValid(false);
-    JointVelParam.SetValid(false);
-    JointState.SetValid(false);
-    JointStateDesired.SetValid(false);
-    CartPos.SetValid(false);
-    CartVelParam.SetValid(false);
-    WrenchGet.SetValid(false);
+    m_measured_js.SetValid(false);
+    m_setpoint_js.SetValid(false);
+    m_measured_cp.SetValid(false);
+    m_measured_cv.SetValid(false);
+    m_measured_cf.SetValid(false);
+    m_setpoint_cp.SetValid(false);
+    m_setpoint_cv.SetValid(false);
 
     // Turn this on to enable sanity check of time difference.
     //bool timeCheckEnabled = (ControllerTime != 0);
@@ -424,7 +491,7 @@ void mtsUniversalRobotScriptRT::Run(void)
         // Call any connected components
         RunEvent();
         ProcessQueuedCommands();
-        this->Sleep(0.008 * cmn_s);
+        this->Sleep(expectedPeriod * cmn_s);
         return;
     }
 
@@ -474,7 +541,17 @@ void mtsUniversalRobotScriptRT::Run(void)
         // we are communicating with, we keep checking in case we made a mistake. This also
         // collects useful debug data.
         int i;
-        for (i = VER_UNKNOWN+1; i < VER_MAX; i++) {
+        int vStart = VER_PRE_18;
+        int vEnd = VER_MAX;
+        if (pversion.major == 3) {
+            vStart = VER_30_31;
+            vEnd = VER_3_NEW;
+        }
+        else if (pversion.major == 5) {
+            vStart = VER_50_53;
+            vEnd = VER_5_NEW;
+        }
+        for (i = vStart; i < vEnd; i++) {
             if (packageLength == PacketLength[i]) {
                 PacketCount[i]++;
                 if (version == VER_UNKNOWN)
@@ -487,12 +564,30 @@ void mtsUniversalRobotScriptRT::Run(void)
                         version = static_cast<FirmwareVersion>(i);
                     }
                 }
+                // Expected period is 0.008 sec (125 Hz) for CB2/CB3 and
+                // 0.002 (500 Hz) for e-Series
+                ticksPerSec = (version < VER_50_53) ? 125 : 500;
+                expectedPeriod = (version < VER_50_53) ? 0.008 : 0.002;
                 break;
             }
         }
-        // If we didn't find a match above, increment the VER_UNKNOWN packet counter
-        if (i == VER_MAX)
+        if ((i == VER_3_NEW) || (i == VER_5_NEW)) {
+            if (PacketLength[i] == 0) {
+                CMN_LOG_CLASS_RUN_WARNING << "Found new version, packet length = "
+                                          << packageLength << ", polyscope version = "
+                                          << GetPolyscopeVersionString() << std::endl;
+            }
+            else if (packageLength != PacketLength[i]) {
+                CMN_LOG_CLASS_RUN_WARNING << "Switching new version packet length from "
+                                          << PacketLength[i] << " to "
+                                          << packageLength << std::endl;
+            }
+            PacketLength[i] = packageLength;
+        }
+        else if (i == VER_MAX) {
+            // If we didn't find a match above, increment the VER_UNKNOWN packet counter
             PacketCount[VER_UNKNOWN]++;
+        }
         if (version != VER_UNKNOWN) {
             if (packageLength < PacketLength[version]) {
                 debug[2] += 1;
@@ -505,39 +600,30 @@ void mtsUniversalRobotScriptRT::Run(void)
             // Following is valid for all versions
             module1 *base1 = reinterpret_cast<module1 *>(buffer);
             // First, do a sanity check on the packet. The new ControllerTime (base1->time)
-            // should be about 0.008 seconds later than the previous value.
+            // should be about 0.008 seconds (CB2/CB3) or 0.002 seconds (e-Series) later than
+            // the previous value.
             double timeDiff = base1->time - ControllerTime;
             debug[0] = 1000.0*timeDiff;
-            if (timeCheckEnabled && ((timeDiff < 0.004) || (timeDiff > 0.024))) {
+            if (timeCheckEnabled && ((timeDiff < (expectedPeriod/2)) || (timeDiff > (3*expectedPeriod)))) {
                 // Could create a different event
                 PacketInvalid(vctULong2(numBytes, packageLength));
                 // Try to recover next time
-                ControllerTime += 0.008;
+                ControllerTime += expectedPeriod;
             }
             else {
                 ControllerTime = base1->time;
-                JointPos.Assign(base1->qActual);
-                JointPosParam.SetPosition(JointPos);
-                JointPosParam.SetValid(true);
-                JointTargetPos.Assign(base1->qTarget);
-                JointVel.Assign(base1->qdActual);
-                JointVelParam.SetVelocity(JointVel);
-                JointVelParam.SetValid(true);
-                JointTargetVel.Assign(base1->qdTarget);
+                m_measured_js.Position().Assign(base1->qActual);
+                m_setpoint_js.Position().Assign(base1->qTarget);
+                m_measured_js.Velocity().Assign(base1->qdActual);
+                m_setpoint_js.Velocity().Assign(base1->qdTarget);
                 // Note that efforts are actually currents; should specify torque
                 // instead of current, but UR does not provide measured torque
                 // (i.e., provides I_Actual, I_Target, and M_Target, but not M_Actual).
-                JointEffort.Assign(base1->I_Actual);
-                JointTargetEffort.Assign(base1->I_Target);
+                m_measured_js.Effort().Assign(base1->I_Actual);
+                m_setpoint_js.Effort().Assign(base1->I_Target);
 
-                JointState.Position().Assign(JointPos);
-                JointState.Velocity().Assign(JointVel);
-                JointState.Effort().Assign(JointEffort);
-                JointState.SetValid(true);
-                JointStateDesired.Position().Assign(JointTargetPos);
-                JointStateDesired.Velocity().Assign(JointTargetVel);
-                JointStateDesired.Effort().Assign(JointTargetEffort);
-                JointStateDesired.SetValid(true);
+                m_measured_js.SetValid(true);
+                m_setpoint_js.SetValid(true);
             }
             module2 *base2 = (version <= VER_18) ? (module2 *)(&((packet_pre_3 *)buffer)->base2)
                                                  : (module2 *)(&((packet_30_31 *)buffer)->base2);
@@ -557,14 +643,14 @@ void mtsUniversalRobotScriptRT::Run(void)
 
             // We use the jointModes rather than robotMode to determine whether power is on because
             // the defined jointModes are consistent between firmware versions, whereas robotMode is not.
-            // For jointModes, power is on if we are RUNNING, FREEDRIVE, INITIALISATION, or SECURITY_STOPPED.
+            // For jointModes, power is on if we are RUNNING, FREEDRIVE, INITIALISATION, or VIOLATION.
             // The following code handles joints in any combination of the above states (e.g., some joints
             // can be in JOINT_INITIALISATION_MODE while the rest of the joints are in JOINT_RUNNING_MODE).
             // Note that in cisstVector, addition is specialized as logical OR for boolean vectors.
-            vctBool6 jointHasPower(jointModes.ElementwiseEqual(JOINT_RUNNING_MODE));
+            vctBool6 jointHasPower(jointModes.ElementwiseEqual(JOINT_MODE_RUNNING));
             jointHasPower.Add(jointModes.ElementwiseEqual(JOINT_FREEDRIVE_MODE));
             jointHasPower.Add(jointModes.ElementwiseEqual(JOINT_INITIALISATION_MODE));
-            jointHasPower.Add(jointModes.ElementwiseEqual(JOINT_SECURITY_STOPPED_MODE));
+            jointHasPower.Add(jointModes.ElementwiseEqual(JOINT_MODE_VIOLATION));
             isPowerOn = jointHasPower.All();
 
             double *tool_vec = 0;
@@ -593,6 +679,23 @@ void mtsUniversalRobotScriptRT::Run(void)
                 // Whether e-stop is pressed
                 isEStop = (safetyMode == SAFETY_MODE_ROBOT_EMERGENCY_STOP);
                 isSecurityStop = (safetyMode == SAFETY_MODE_PROTECTIVE_STOP);
+                // Convert target Cartesian position to setpoint_cp; also save it in setpointCP
+                // for possible use by move_cp and move_cr.
+                setpointCP.Assign(packet->tool_vec_Tar);
+                vct3 position(packet->tool_vec_Tar);
+                vct3 orientation(packet->tool_vec_Tar+3);
+                vctRodriguezRotation3<double> rot(orientation);
+                vctDoubleRot3 cartRot(rot);  // rotation matrix, from world frame to the end-effector frame
+                vctFrm3 frm(cartRot, position);
+                m_setpoint_cp.SetPosition(frm);
+                m_setpoint_cp.SetValid(true);
+                // Target Cartesian velocity
+                m_setpoint_cv.SetVelocity(vct6(packet->TCP_speed_Tar));
+                m_setpoint_cv.SetValid(true);
+                if (version >= VER_510) {
+                    packet_510 *packet = (packet_510 *)(buffer);
+                    payload = packet->payload_mass;
+                }
             }
             if (tool_vec) {
                 vct3 position(tool_vec);
@@ -600,23 +703,23 @@ void mtsUniversalRobotScriptRT::Run(void)
                 vctRodriguezRotation3<double> rot(orientation);
                 vctDoubleRot3 cartRot(rot);  // rotation matrix, from world frame to the end-effector frame
                 vctFrm3 frm(cartRot, position);
-                CartPos.SetPosition(frm);
-                CartPos.SetValid(true);
+                m_measured_cp.SetPosition(frm);
+                m_measured_cp.SetValid(true);
             }
-            CartVelParam.SetVelocity(TCPSpeed);
-            CartVelParam.SetValid(true);
-            WrenchGet.SetForce(TCPForce);
-            WrenchGet.SetValid(true);
+            m_measured_cv.SetVelocity(TCPSpeed);
+            m_measured_cv.SetValid(true);
+            m_measured_cf.SetForce(TCPForce);
+            m_measured_cf.SetValid(true);
             // Finished with packet; now preserve any extra data for next time
             if (packageLength < static_cast<unsigned long>(numBytes)) {
                 memmove(buffer, buffer+packageLength, numBytes-packageLength);
                 buffer_idx = numBytes-packageLength;
-            }
-            else
+            } else {
                 buffer_idx = 0;
-        }
-        else
+            }
+        } else {
             buffer_idx = 0;
+        }
     }
     else {
         buffer_idx = 0;
@@ -665,7 +768,7 @@ void mtsUniversalRobotScriptRT::Run(void)
             // Also using VelCmdTimeout, VelCmdString for free drive mode
             VelCmdTimeout--;
             if (VelCmdTimeout <= 0) {
-                VelCmdTimeout = 125;   // 1 second
+                VelCmdTimeout = ticksPerSec;   // 1 second
                 socket.Send(VelCmdString);
             }
         }
@@ -673,12 +776,12 @@ void mtsUniversalRobotScriptRT::Run(void)
 
     case UR_POS_MOVING:
         // Motion is finished when target velocity is 0 or power is off
-        if ((!JointTargetVel.Any()) || (!isPowerOn))
+        if ((!m_setpoint_js.Velocity().Any()) || (!isPowerOn))
             UR_State = UR_IDLE;
         break;
 
     case UR_POWERING_ON:
-        if (jointModes.Equal(JOINT_IDLE_MODE)) {
+        if (jointModes.Equal(JOINT_MODE_IDLE)) {
             if (version < VER_30_31) {
                 // Seems to be necessary to send another "power on" command
                 // before sending "brake release".
@@ -706,15 +809,12 @@ void mtsUniversalRobotScriptRT::Run(void)
 
     // Check for any responses via Dashboard server
     if (socketDBconnected) {
-        char bufferDB[128];
-        int nBytes = socketDB.Receive(bufferDB, sizeof(bufferDB));
-        if (nBytes > 0) {
-            bufferDB[nBytes-1] = 0;  // Remove last character (newline)
-            mInterface->SendStatus(this->GetName() + "-DashboardServer: " + std::string(bufferDB));
+        std::string response;
+        if (RecvFromDashboardServer(response)) {
+            mInterface->SendStatus(this->GetName() + "-DashboardServer: " + response);
         }
     }
 }
-
 
 void mtsUniversalRobotScriptRT::Cleanup(void)
 {
@@ -741,26 +841,30 @@ void mtsUniversalRobotScriptRT::ReceiveTimeout(void)
 
 bool mtsUniversalRobotScriptRT::SendAndReceiveDB(const std::string &cmd, std::string &recv)
 {
-    char buf[100];
+    // First, flush any existing responses
+    std::string response;
+    while (RecvFromDashboardServer(response)) {
+        mInterface->SendStatus(this->GetName() + "-DashboardServer: " + response);
+    }
+    // Now, send command
     if (socketDB.Send(cmd) < 0) return false;
-    this->Sleep(0.1);   // wait for reply
-    if (socketDB.Receive(buf, 100) < 0) return false;
-
-    recv = buf;
-    return true;
+    // Wait for reply
+    this->Sleep(0.1);
+    // Receive response
+    return RecvFromDashboardServer(recv);
 }
 
 void mtsUniversalRobotScriptRT::SetRobotFreeDriveMode(void)
 {
-    if ((UR_State == UR_IDLE) || (UR_State == UR_FREE_DRIVE)) {
+    if (isPowerOn && ((UR_State == UR_IDLE) || (UR_State == UR_FREE_DRIVE))) {
         if (version < VER_30_31) {
             if (socket.Send("set robotmode freedrive\n") == -1)
                 SocketError();
         } else {
             VelCmdTimeout = 0;
             strcpy(VelCmdString, "def saw_ur_freedrive():\n\tfreedrive_mode()\n\tsleep(1.5)\nend\n");
-            // This string will be sent from the Run method, once every 125 loops (1 second).
-            // The programmed sleep is for 1.5 seconds, which should be long enough.
+            // This string will be sent from the Run method, once every 125 (CB2/CB3) or 500 (e-series)
+            // loops (1 second). The programmed sleep is for 1.5 seconds, which should be long enough.
         }
         UR_State = UR_FREE_DRIVE;
         mInterface->SendStatus(this->GetName() + ": set freedrive mode");
@@ -771,7 +875,7 @@ void mtsUniversalRobotScriptRT::SetRobotFreeDriveMode(void)
 
 void mtsUniversalRobotScriptRT::SetRobotRunningMode(void)
 {
-    if (UR_State == UR_FREE_DRIVE) {
+    if (isPowerOn && (UR_State == UR_FREE_DRIVE)) {
         int ret;
         if (version < VER_30_31) {
             ret = socket.Send("set robotmode run\n");
@@ -825,9 +929,9 @@ void mtsUniversalRobotScriptRT::UnlockSecurityStop(void)
         mInterface->SendWarning(this->GetName() + ": UnlockSecurityStop not supported for this firmware version");
 }
 
-void mtsUniversalRobotScriptRT::JointVelocityMove(const prmVelocityJointSet &jtvelSet)
+void mtsUniversalRobotScriptRT::servo_jv(const prmVelocityJointSet & jtvelSet)
 {
-    if ((UR_State == UR_IDLE) || (UR_State == UR_VEL_MOVING)) {
+    if (isPowerOn && ((UR_State == UR_IDLE) || (UR_State == UR_VEL_MOVING))) {
         jtvelSet.GetGoal(jtvel);
         // velocity check
         for (int i = 0; i < NB_Actuators; i++) {
@@ -859,17 +963,18 @@ void mtsUniversalRobotScriptRT::JointVelocityMove(const prmVelocityJointSet &jtv
                     jtvel[0], jtvel[1], jtvel[2], jtvel[3], jtvel[4], jtvel[5], 1.4);
             strcpy(VelCmdStop, "speedj([0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 1.4, 0.0)\n");
         }
-        VelCmdTimeout = 125;   // Number of cycles for command to remain valid (1 second)
+        // Number of cycles for command to remain valid (1 second)
+        VelCmdTimeout = ticksPerSec;
         UR_State = UR_VEL_MOVING;
-    }
-    else
+    } else {
         RobotNotReady();
+    }
 }
 
-void mtsUniversalRobotScriptRT::JointPositionMove(const prmPositionJointSet &jtposSet)
+void mtsUniversalRobotScriptRT::move_jp(const prmPositionJointSet & jtposSet)
 {
     char JointPosCmdString[100];
-    if (UR_State == UR_IDLE) {
+    if (isPowerOn && (UR_State == UR_IDLE)) {
         jtposSet.GetGoal(jtpos);
         // For now, we issue a movej command; in the future, we may use a trajectory
         // generator and use servoj.
@@ -877,53 +982,115 @@ void mtsUniversalRobotScriptRT::JointPositionMove(const prmPositionJointSet &jtp
         sprintf(JointPosCmdString,
                 "movej([%6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf], a=%6.4lf, v=%6.4lf)\n",
                 jtpos[0], jtpos[1], jtpos[2], jtpos[3], jtpos[4], jtpos[5], 1.0, 0.2);
-        if (socket.Send(JointPosCmdString) == -1)
+        if (socket.Send(JointPosCmdString) == -1) {
             SocketError();
-        else
+        } else {
             UR_State = UR_POS_MOVING;
-    }
-    else
+        }
+    } else {
         RobotNotReady();
+    }
 }
 
-void mtsUniversalRobotScriptRT::CartesianVelocityMove(const prmVelocityCartesianSet &CartVel)
+void mtsUniversalRobotScriptRT::servo_cv(const prmVelocityCartesianSet & cartVel)
 {
-    if ((UR_State == UR_IDLE) || (UR_State == UR_VEL_MOVING)) {
-        vct3 velxyz = CartVel.GetVelocity();
-        vct3 velrot = CartVel.GetAngularVelocity();
+    if (isPowerOn && ((UR_State == UR_IDLE) || (UR_State == UR_VEL_MOVING))) {
+        vct3 velxyz = cartVel.GetVelocity();
+        vct3 velrot = cartVel.GetAngularVelocity();
+        // a (acceleration) is in m/s^2
+        double accel = cartVel.GetAcceleration().MaxAbsElement();
+        if (accel == 0.0)
+            accel = 1.4;   // default acceleration
         // speedl(qd, a, t, aRot)
         sprintf(VelCmdString,
                 "speedl([%6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf], %6.4lf, 0.1)\n",
-                velxyz.X(), velxyz.Y(), velxyz.Z(), velrot.X(), velrot.Y(), velrot.Z(), 1.4);
+                velxyz.X(), velxyz.Y(), velxyz.Z(), velrot.X(), velrot.Y(), velrot.Z(), accel);
         strcpy(VelCmdStop, "speedl([0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 1.4, 0.0)\n");
-        VelCmdTimeout = 125;   // Number of cycles for command to remain valid (1 second)
+        // Number of cycles for command to remain valid (1 second)
+        VelCmdTimeout = ticksPerSec;
         UR_State = UR_VEL_MOVING;
-    }
-    else
+    } else {
         RobotNotReady();
+    }
 }
 
-void mtsUniversalRobotScriptRT::CartesianPositionMove(const prmPositionCartesianSet &CartPos)
+void mtsUniversalRobotScriptRT::move_cp(const prmPositionCartesianSet & cartPos)
 {
     char CartPosCmdString[100];
-    if (UR_State == UR_IDLE) {
-        vctDoubleFrm3 cartFrm = CartPos.GetGoal();
-        vctRodriguezRotation3<double> rot;
-        rot.From(cartFrm.Rotation());  // The rotation vector
+    if (isPowerOn && (UR_State == UR_IDLE)) {
+        vctDoubleFrm3 cartFrm = cartPos.Goal();
+        vctBool2 mask = cartPos.Mask();
+        if (!mask.Any()) {
+            CMN_LOG_CLASS_RUN_WARNING << "move_cp: no move specified (mask is false)" << std::endl;
+            return;
+        }
+        if ((version < VER_30_31) && !mask.All()) {
+            CMN_LOG_CLASS_RUN_ERROR << "move_cp: must specify both position and orientation for CB2" << std::endl;
+            RobotNotReady();
+            return;
+        }
+        vct3 posGoal;
+        if (mask[0]) {
+            posGoal = cartFrm.Translation();
+        }
+        else {
+            posGoal.Assign(setpointCP.Pointer());
+        }
+        vct3 rotGoal;
+        if (mask[1]) {
+            vctRodriguezRotation3<double> rot;
+            rot.From(cartFrm.Rotation());  // The rotation vector
+            rotGoal.Assign(rot);
+        }
+        else {
+            rotGoal.Assign(setpointCP.Pointer()+3);
+        }
         // a (acceleration) is in m/s^2 and v (velocity) is in m/s.
-        // For now, use hard-coded values. In future, improve prmPositionCartesianSet
-        // to be able to reliably specify acceleration and velocity.
+        double trajVel = cartPos.Velocity().MaxAbsElement();
+        if (trajVel == 0.0)
+            trajVel = 0.03;  // default speed
+        double trajAcc = cartPos.Acceleration().MaxAbsElement();
+        if (trajAcc == 0.0)
+            trajAcc = 0.8;   // default acceleration
         sprintf(CartPosCmdString,
             "movel(p[%6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf, %6.4lf], a=%6.4lf, v=%6.4lf)\n",
-            cartFrm.Translation().X(), cartFrm.Translation().Y(), cartFrm.Translation().Z(),
-            rot.X(), rot.Y(), rot.Z(), 0.8, 0.03);
-        if (socket.Send(CartPosCmdString) == -1)
+                posGoal.X(), posGoal.Y(), posGoal.Z(),
+                rotGoal.X(), rotGoal.Y(), rotGoal.Z(), trajAcc, trajVel);
+        if (socket.Send(CartPosCmdString) == -1) {
             SocketError();
-        else
+        } else {
             UR_State = UR_POS_MOVING;
-    }
-    else
+        }
+    } else {
         RobotNotReady();
+    }
+}
+
+void mtsUniversalRobotScriptRT::move_cr(const prmPositionCartesianSet & cartPos)
+{
+    vctBool2 mask = cartPos.Mask();
+    if (!mask.Any()) {
+        CMN_LOG_CLASS_RUN_WARNING << "move_cr: no move specified (mask is false)" << std::endl;
+        return;
+    }
+    if (version < VER_30_31) {
+        CMN_LOG_CLASS_RUN_ERROR << "move_cr: not currently supported on CB2" << std::endl;
+        // May be able to use UR script function get_target_tcp_pose()
+        RobotNotReady();
+        return;
+    }
+    prmPositionCartesianSet cartPosAbs(cartPos);
+    // Only need to update masked goals
+    vct3 pos(m_setpoint_cp.Position().Translation());
+    vctDoubleRot3 rot(m_setpoint_cp.Position().Rotation());
+    if (mask[0]) {
+        pos.Add(cartPos.Goal().Translation());
+    }
+    if (mask[1]) {
+        rot = cartPos.Goal().Rotation()*rot;
+    }
+    cartPosAbs.SetGoal(vctDoubleFrm3(rot, pos));
+    move_cp(cartPosAbs);
 }
 
 void mtsUniversalRobotScriptRT::StopMotion(void)
@@ -933,6 +1100,21 @@ void mtsUniversalRobotScriptRT::StopMotion(void)
     else {
         if ((UR_State == UR_POS_MOVING) || (UR_State == UR_VEL_MOVING) || (UR_State == UR_FREE_DRIVE))
             UR_State = UR_IDLE;
+    }
+}
+
+// Returns version detected from packet length (which is often a range of versions),
+// followed by Polyscope version in parentheses.
+void mtsUniversalRobotScriptRT::GetVersionString(std::string &str) const
+{
+    if (version < VER_MAX)
+        str.assign(VersionName[version]);
+    else
+        str.assign("Invalid");
+    if (pversion.major != 0) {
+        str.append(" (");
+        str.append(GetPolyscopeVersionString());
+        str.append(")");
     }
 }
 
@@ -954,6 +1136,9 @@ void mtsUniversalRobotScriptRT::SetPayload(const double &mass_kg)
     sprintf(buf, "set_payload(%8.3lf)\n", mass_kg);
     if (socket.Send(buf) == -1)
         SocketError();
+    // Update the state table. Starting with Ver 5.10, the payload is returned via
+    // the interface, which will overwrite this setting.
+    payload = mass_kg;
 }
 
 // Set transformation from output flange to TCP
@@ -1004,25 +1189,56 @@ void mtsUniversalRobotScriptRT::SendToDashboardServer(const std::string &msg)
         SocketError();
 }
 
-void mtsUniversalRobotScriptRT::GetPolyscopeVersion(std::string &pver)
+bool mtsUniversalRobotScriptRT::RecvFromDashboardServer(std::string &resp)
 {
-    SendAndReceiveDB("PolyscopeVersion\n", pver);
-
-    std::vector<std::string> strings;
-    std::string s;
-    std::istringstream f(pver);
-    while (getline(f, s, '.')) {
-        strings.push_back(s);
+    char bufferDB[128];
+    int nBytes = socketDB.Receive(bufferDB, sizeof(bufferDB));
+    if (nBytes > 0) {
+        bufferDB[nBytes-1] = 0;  // Remove last character (newline)
+        resp.assign(bufferDB);
     }
+    return (nBytes > 0);
+}
 
-    if (strings.size() != 3) {
-        std::cerr << "invalid version\n";
+bool mtsUniversalRobotScriptRT::ReadPolyscopeVersion(void)
+{
+    std::string pver;
+    if (!SendAndReceiveDB("PolyscopeVersion\n", pver))
+        return false;
+
+    // According to e-Series manual, response has following format:
+    //   "URSoftware 5.12.0.1101319 (Mar 22 2022)"
+    // According to CB series manual, command has been available since
+    // version 1.8 and response has following format: "3.0.15547", but
+    // at least some CB3 series controllers return the longer message,
+    // e.g., "URSoftware 3.12.0.90886 (Nov 15 2019)"
+    CMN_LOG_CLASS_RUN_VERBOSE << "ReadPolyscopeVersion: " << pver << std::endl;
+
+    // First, check for "URSoftware " string and advance past it if found
+    std::string compareStr("URSoftware ");
+    size_t offset = 0;
+    if (pver.compare(0, compareStr.size(), compareStr) == 0)
+        offset = compareStr.size();
+
+    // Using sscanf instead of std::string and/or std::stringstream to parse version string
+    int major, minor, bugfix;
+    int n = sscanf(pver.c_str()+offset, "%d.%d.%d", &major, &minor, &bugfix);
+    if (n == 3) {
+        pversion.major = major;
+        pversion.minor = minor;
+        pversion.bugfix = bugfix;
+        CMN_LOG_CLASS_RUN_WARNING << "ReadPolyscopeVersion: version = "
+                                  << GetPolyscopeVersionString() << std::endl;
     }
     else {
-        // FIXME: major in string is 3, however atoi returns 0
-        pversion.major = atoi(strings[0].c_str());
-        pversion.minor = atoi(strings[1].c_str());
-        pversion.bugfix = atoi(strings[2].c_str());
-        std::cout << "major = " << strings[0].c_str() << "  minor = " << strings[1] << "  bugfix = " << strings[2] << "\n";
+        CMN_LOG_CLASS_RUN_WARNING << "ReadPolyscopeVersion: failed to parse version from " << pver << std::endl;
     }
+    return (n == 3);
+}
+
+std::string mtsUniversalRobotScriptRT::GetPolyscopeVersionString(void) const
+{
+    std::ostringstream resp;
+    resp << pversion.major << "." << pversion.minor << "." << pversion.bugfix;
+    return resp.str();
 }
