@@ -15,10 +15,10 @@ Since the main component doesn't depend on ROS, it can be used on Windows or Lin
   * OpenIGTLink: https://github.com/jhu-saw/sawOpenIGTLink (any OS)
   * ROS 1 or 2 (Linux)
 
-The `ros` folder contains code for a ROS 1 node that interfaces with the
+The `ros` folder contains code for a ROS node that interfaces with the
 sawUniversalRobot component and publishes the 3D transformations as
 well as the joint state (position, velocity and effort).  To build
-the ROS node, make sure you use `catkin build`.  For ROS 2, see https://github.com/jhu-saw/sawUniversalRobotROS2.
+the ROS node, make sure you use `catkin build` (ROS 1) or `colcon build` (ROS2).
 
 # Links
  * License: http://github.com/jhu-cisst/cisst/blob/master/license.txt
@@ -37,7 +37,7 @@ See https://github.com/jhu-saw/vcs for download and build instructions.  Use the
 
 ## ROS
 
-First you need to make sure you can communicate with the UR robot using it's IP address (for example 10.162.34.61).
+First you need to make sure you can communicate with the UR robot using its IP address (for example 10.162.34.61).
 The ROS node is `universal_robot` and can be found in the package `universal_robot_ros`:
 ```sh
 rosrun universal_robot_ros universal_robot -i 10.162.34.61
