@@ -1,5 +1,5 @@
 #
-# (C) Copyright 2014-2023 Johns Hopkins University (JHU), All Rights Reserved.
+# (C) Copyright 2014-2026 Johns Hopkins University (JHU), All Rights Reserved.
 #
 # --- begin cisst license - do not edit ---
 #
@@ -14,7 +14,6 @@ cmake_minimum_required(VERSION 3.10)
 project (sawUniversalRobotAll VERSION 1.1.0)
 
 find_package (cisst REQUIRED)
-include (${CISST_USE_FILE})
 cisst_cpack_settings (
   VENDOR "JHU"
   MAINTAINER "peter.kazanzides@jhu.edu")
