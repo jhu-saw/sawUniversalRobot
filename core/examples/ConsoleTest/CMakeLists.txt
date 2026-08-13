@@ -1,5 +1,5 @@
 #
-# (C) Copyright 2016-2023 Johns Hopkins University (JHU), All Rights Reserved.
+# (C) Copyright 2016-2026 Johns Hopkins University (JHU), All Rights Reserved.
 #
 # --- begin cisst license - do not edit ---
 #
@@ -20,35 +20,24 @@ set (REQUIRED_CISST_LIBRARIES cisstCommon
                               cisstParameterTypes)
 
 # find cisst and make sure the required libraries have been compiled
-find_package (cisst 1.2 COMPONENTS ${REQUIRED_CISST_LIBRARIES})
+find_package (cisst 1.2 REQUIRED COMPONENTS ${REQUIRED_CISST_LIBRARIES})
 
-if (cisst_FOUND_AS_REQUIRED)
+find_package (sawUniversalRobot 1.1.0 REQUIRED
+              HINTS "${CMAKE_BINARY_DIR}/components")
+include_directories (${sawUniversalRobot_INCLUDE_DIR})
+link_directories (${sawUniversalRobot_LIBRARY_DIR})
 
-  # load cisst configuration
-  include (${CISST_USE_FILE})
+add_executable (sawUniversalRobotConsole main.cpp)
 
-  find_package (sawUniversalRobot 1.1.0 REQUIRED
-                HINTS "${CMAKE_BINARY_DIR}/components")
-  include_directories (${sawUniversalRobot_INCLUDE_DIR})
-  link_directories (${sawUniversalRobot_LIBRARY_DIR})
+target_link_libraries (sawUniversalRobotConsole
+                       ${sawUniversalRobot_LIBRARIES}
+                       ${cisst_LIBRARIES})
 
-  add_executable (sawUniversalRobotConsole main.cpp)
+set_target_properties (sawUniversalRobotConsole PROPERTIES
+  COMPONENT sawUniversalRobot-Examples
+  FOLDER "sawUniversalRobot")
 
-  # link with the cisst libraries
-  cisst_target_link_libraries (sawUniversalRobotConsole ${REQUIRED_CISST_LIBRARIES})
-
-  # link with sawUniversalRobot library
-  target_link_libraries (sawUniversalRobotConsole ${sawUniversalRobot_LIBRARIES})
-
-  set_target_properties (sawUniversalRobotConsole PROPERTIES
-    COMPONENT sawUniversalRobot-Examples
-    FOLDER "sawUniversalRobot")
-
-  install (TARGETS sawUniversalRobotConsole COMPONENT sawUniversalRobot-Examples
-    RUNTIME DESTINATION bin
-    LIBRARY DESTINATION lib
-    ARCHIVE DESTINATION lib)
-
-else (cisst_FOUND_AS_REQUIRED)
-  message ("Information: sawUniversalRobotConsole will not be compiled, it requires ${REQUIRED_CISST_LIBRARIES}")
-endif (cisst_FOUND_AS_REQUIRED)
+install (TARGETS sawUniversalRobotConsole COMPONENT sawUniversalRobot-Examples
+  RUNTIME DESTINATION bin
+  LIBRARY DESTINATION lib
+  ARCHIVE DESTINATION lib)
