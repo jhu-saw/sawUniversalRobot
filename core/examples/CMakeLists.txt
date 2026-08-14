@@ -9,12 +9,12 @@
 #
 # --- end cisst license ---
 
-cmake_minimum_required (VERSION 3.10)
-project (sawUniversalRobotExamples VERSION 1.1.0)
+cmake_minimum_required (VERSION 3.16)
+project (sawUniversalRobotExamples VERSION 1.2.0)
 
 # Find cisst to define catkin macros so we can define the executable
 # output path
-find_package (cisst 1.2 REQUIRED)
+find_package (cisst 1.5 REQUIRED)
 
 # catkin/ROS paths
 cisst_set_output_path ()
