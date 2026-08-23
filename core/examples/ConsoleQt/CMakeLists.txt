@@ -9,8 +9,8 @@
 #
 # --- end cisst license ---
 
-cmake_minimum_required (VERSION 3.10)
-project (sawUniversalRobotConsoleQt VERSION 1.1.0)
+cmake_minimum_required (VERSION 3.16)
+project (sawUniversalRobotConsoleQt VERSION 1.2.0)
 
 # List cisst libraries needed
 set (REQUIRED_CISST_LIBRARIES
@@ -26,7 +26,7 @@ set (REQUIRED_CISST_LIBRARIES
 )
 
 # find cisst and make sure the required libraries have been compiled
-find_package (cisst 1.2 REQUIRED COMPONENTS ${REQUIRED_CISST_LIBRARIES})
+find_package (cisst 1.5 REQUIRED COMPONENTS ${REQUIRED_CISST_LIBRARIES})
 
 # catkin/ROS paths
 cisst_set_output_path ()

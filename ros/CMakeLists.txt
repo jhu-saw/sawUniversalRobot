@@ -9,8 +9,8 @@
 #
 # --- end cisst license ---
 
-cmake_minimum_required (VERSION 3.10)
-project (universal_robot VERSION 1.1.0)
+cmake_minimum_required (VERSION 3.16)
+project (universal_robot VERSION 1.2.0)
 
 # first test for ROS1
 set (ROS1_depends cisst_ros_crtk roscpp roslib)
@@ -57,7 +57,7 @@ set (REQUIRED_CISST_LIBRARIES
   cisstParameterTypesQt
 )
 
-find_package (cisst 1.2 REQUIRED COMPONENTS ${REQUIRED_CISST_LIBRARIES})
+find_package (cisst 1.5 REQUIRED COMPONENTS ${REQUIRED_CISST_LIBRARIES})
 
 # set paths
 cisst_set_output_path ()

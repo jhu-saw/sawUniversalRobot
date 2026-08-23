@@ -9,8 +9,8 @@
 #
 # --- end cisst license ---
 
-cmake_minimum_required (VERSION 3.10)
-project (sawUniversalRobot VERSION 1.1.0)
+cmake_minimum_required (VERSION 3.16)
+project (sawUniversalRobot VERSION 1.2.0)
 
 set (REQUIRED_CISST_LIBRARIES
   cisstCommon
@@ -19,7 +19,7 @@ set (REQUIRED_CISST_LIBRARIES
   cisstMultiTask
   cisstParameterTypes)
 
-find_package (cisst 1.2 REQUIRED COMPONENTS ${REQUIRED_CISST_LIBRARIES})
+find_package (cisst 1.5 REQUIRED COMPONENTS ${REQUIRED_CISST_LIBRARIES})
 
 # catkin/ROS paths
 cisst_set_output_path ()
@@ -61,4 +61,3 @@ install (TARGETS sawUniversalRobot COMPONENT sawUniversalRobot
          RUNTIME DESTINATION bin
          LIBRARY DESTINATION lib
          ARCHIVE DESTINATION lib)
-
