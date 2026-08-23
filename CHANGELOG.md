@@ -1,8 +1,8 @@
 Change log
 ==========
 
-1.2.0 (TBD)
-===========
+1.2.0 (2026-08-22)
+==================
 
 * Provides a SAW component for UR3, UR5, UR10, UR16, and UR20 robots through
   the Universal Robots real-time scripting/socket interface.
